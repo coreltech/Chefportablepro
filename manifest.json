@@ -1,0 +1,39 @@
+{
+  "name": "ChefPortable PRO",
+  "short_name": "ChefPortable",
+  "description": "Calculadora de costos de recetas con sincronización en la nube",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#4361ee",
+  "theme_color": "#4361ee",
+  "orientation": "portrait",
+  "scope": "./",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AcxV9TpVUrHewg4pChOlkQFXHUKhShQqgVWnUwufQLmjQkKS6OgmvBwY/FqoOLs64OroIg+AHi5Oik6CIl/i8ptIjx4Lgf7+497t4BQqPCVLNrHFA1y0jFY2I2tyoGX+GFQEAQooYzZSTjBUdcKxO97Kvrwj6N+je5V4l+8kF8kkJh5zBQ4I3lOc3bRNvE4dYwSROHn4w7MsQJGPlXvaFcdjAs77OIZZnrbXOJgcs6Q85GmWdHIp4lj1Ma5u1MFc77SLVZqbk0V5vd4Co5fLXOdptZhoJ+Jcw0zKkWI4VaKgT4n6TYwAVL85FzftC55/MOCv0JtN1QYMuVwzJ2jzuUiwK6Lc3/Q41gtP8L46K1QJEuO+0TgB4t1Nx9p73eM0H0w9adLruhMEC8DF9ddTd4DLneAoSddMiRH8tMU8nng/Yy+KQMM3wJja1dTX20AvO/Cl5fWxM8D6FqFq25c72AHHOwD+jZtb9R23d8PLb38fV+5qgG0bepK6Bql7cAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5wQVEjIx54LhLwAAAVZJREFUOMut079LGlEcx/HXldGhhpbA/yCpP8CWwqGlS6VTY0OB7tB/k2NTOQh1utH0gnRwaGmoKbBRKNImndx8CBr4/X7vdYgLr9DhA+/he7/v53A+9xzC6H9eYcEQ6sAmGrAAyFfq7uACBzhHHYAAy8A3oAI8Bh7WqgKngBfAOvAV6AN1Y8w3l6fgZ8FesCqEEL+Al0BpcnLSzM3NmcXFRTM7O2uEEAZYBTaBJvDNQghhjDEzQA9YBcrm5mZcLBbNxMSEGRsbM+Pj46ZQKJhisWju7u5+AyVgB3gthBAAecA6nud9z+fzZnR01ORyOTMyMmKy2azJZDLGGMByuVyuF4tFc3t7+1MIsW2M+f5/1bbGmC/B/k0Ise153p7jOC8cx3nmed6e67o71toasA/8ARKTSwQdDdHNAAAAAElFTkSuQmCC",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABhWlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AcxV9TpVUrHewg4pChOlkQFXHUKhShQqgVWnUwufQLmjQkKS6OgmvBwY/FqoOLs64OroIg+AHi5Oik6CIl/i8ptIjx4Lgf7+497t4BQqPCVLNrHFA1y0jFY2I2tyoGX+GFQEAQooYzZSTjBUdcKxO97Kvrwj6N+je5V4l+8kF8kkJh5zBQ4I3lOc3bRNvE4dYwSROHn4w7MsQJGPlXvaFcdjAs77OIZZnrbXOJgcs6Q85GmWdHIp4jl1Ma5u1MFc77SLVZqbk0V5vd4Co5fLXOdptZhoJ+Jcw0zKkWI4VaKgT4n6TYwAVL85FzftC55/MOCv0JtN1QYMuVwzJ2jzuUiwK6Lc3/Q41gtP8L46K1QJEuO+0TgB4t1Nx9p73eM0H0w9adLruhMEC8DF9ddTd4DLneAoSddMiRH8tMU8nng/Yy+KQMM3wJja1dTX20AvO/Cl5fWxM8D6FqFq25c72AHHOwD+jZtb9R23d8PLb38fv+5qgG0bepK6Bql7cAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5wQVEjIx54LhLwAAAVZJREFUOMut079LGlEcx/HXldGhhpbA/yCpP8CWwqGlS6VTY0OB7tB/k2NTOQh1utH0gnRwaGmoKbBRKNImndx8CBr4/X7vdYgLr9DhA+/he7/v53A+9xzC6H9eYcEQ6sAmGrAAyFfq7uACBzhHHYAAy8A3oAI8Bh7WqgKngBfAOvAV6AN1Y8w3l6fgZ8FesCqEEL+Al0BpcnLSzM3NmcXFRTM7O2uEEAZYBTaBJvDan7yHk5HEDGJNFeGBo7pRSoGEK4o40EtRjFifwA0LkaYQoVJpHWqgBmh3GqK5E7QaNRa1b0qyKv8GzQa2yKJwZQBJhMTxZgQZAU0BiBcog9w3Bw6jIAdcDcQGEhExgqF8U0uVh4k7qWb6u1m6BvAzTjKLE9jKqKNvO0KN1K08AI8ZUNdM6i2eAtYDG87VZfXf4YfD8U/D+15Lt6xsCEkYQbQLXg4k7qWZ6u1WqBfAzjjLL0xjKqKNlC8OQtvQ7+gAAAABJRU5ErkJggg==",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "screenshots": [
+    {
+      "src": "https://via.placeholder.com/1280x720/4361ee/ffffff?text=ChefPortable+PRO",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "https://via.placeholder.com/540x720/4361ee/ffffff?text=ChefPortable+PRO",
+      "sizes": "540x720",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ]
+}

@@ -1,0 +1,2261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#4361ee">
+  <meta name="description" content="Calculadora de costos de recetas con sincronización en la nube">
+  
+  <title>ChefPortable PRO</title>
+  
+  <!-- Iconos -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  
+  <style>
+    /* ===== VARIABLES Y ESTILOS BASE ===== */
+    :root {
+      --primary: #4361ee;
+      --secondary: #3a0ca3;
+      --success: #4cc9f0;
+      --warning: #f8961e;
+      --danger: #f72585;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --card-bg: #ffffff;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      --radius: 12px;
+      --gradient-primary: linear-gradient(135deg, #4361ee, #3a0ca3);
+      --gradient-success: linear-gradient(135deg, #4cc9f0, #4895ef);
+      --online: #10b981;
+      --offline: #ef4444;
+      --syncing: #f59e0b;
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: 'Segoe UI', system-ui, sans-serif; 
+    }
+    
+    body { 
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      color: #333; 
+      min-height: 100vh;
+      padding: 20px;
+      padding-top: 60px;
+    }
+    
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    /* ===== STATUS BAR ===== */
+    .status-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+    
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    
+    .status-online { background: var(--online); animation: pulse 2s infinite; }
+    .status-offline { background: var(--offline); }
+    .status-syncing { background: var(--syncing); animation: pulse 1s infinite; }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    /* ===== BOTÓN INSTALAR PWA ===== */
+    .pwa-install-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--gradient-primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 50px;
+      box-shadow: 0 5px 20px rgba(67, 97, 238, 0.3);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      z-index: 1000;
+      animation: bounce 2s infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    
+    /* ===== HEADER ===== */
+    .app-header {
+      background: var(--card-bg);
+      padding: 20px 30px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 25px;
+    }
+    
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .logo-icon { font-size: 2.5rem; color: var(--primary); }
+    h1 { color: var(--primary); font-size: 1.8rem; margin: 0; }
+    .version { background: #e9ecef; color: #6c757d; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; }
+    
+    .header-stats {
+      display: flex;
+      gap: 25px;
+      flex-wrap: wrap;
+    }
+    
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      min-width: 100px;
+    }
+    
+    .stat strong { font-size: 1.5rem; color: var(--primary); }
+    .stat small { color: #6c757d; font-size: 0.85rem; }
+    
+    /* ===== TABS ===== */
+    .tabs {
+      display: flex;
+      background: white;
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 25px;
+      box-shadow: var(--shadow);
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 18px;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #6c757d;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .tab:hover { background: #f8f9fa; color: var(--primary); }
+    .tab.active { background: var(--gradient-primary); color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.5s ease-out; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* ===== SECCIONES ===== */
+    .section {
+      background: var(--card-bg);
+      padding: 25px;
+      border-radius: var(--radius);
+      margin-bottom: 25px;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease;
+    }
+    
+    .section:hover { transform: translateY(-5px); }
+    
+    h2 { color: var(--primary); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e9ecef; }
+    h3 { color: var(--secondary); margin: 20px 0 15px; }
+    
+    /* ===== FORMULARIOS ===== */
+    label { display: block; margin: 15px 0 8px; font-weight: 600; color: #495057; }
+    
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s ease;
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+    }
+    
+    /* ===== BOTONES ===== */
+    .btn {
+      background: var(--gradient-primary);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 5px;
+    }
+    
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3); }
+    .btn-success { background: var(--gradient-success); }
+    .btn-warning { background: linear-gradient(135deg, #f8961e, #f3722c); }
+    .btn-danger { background: linear-gradient(135deg, #f72585, #b5179e); }
+    .btn-secondary { background: linear-gradient(135deg, #6c757d, #495057); }
+    .btn-sm { padding: 8px 16px; font-size: 0.9rem; }
+    
+    /* ===== CLOUD SECTION ===== */
+    .cloud-section {
+      background: linear-gradient(135deg, #f0f9ff, #e6f7ff);
+      border-left: 5px solid var(--primary);
+    }
+    
+    /* ===== TARJETAS ===== */
+    .marca-item, .ing-receta {
+      background: #f8fafc;
+      border-left: 4px solid var(--primary);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 15px 0;
+      position: relative;
+    }
+    
+    .remove {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: var(--danger);
+      color: white;
+      border: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    
+    /* ===== NOTIFICACIONES ===== */
+    .notificacion {
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 10px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 400px;
+    }
+    
+    .notificacion-success { background: #10b981; color: white; }
+    .notificacion-error { background: #ef4444; color: white; }
+    .notificacion-warning { background: #f59e0b; color: white; }
+    .notificacion-info { background: #3b82f6; color: white; }
+    
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    /* ===== TABLAS ===== */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    }
+    
+    th { background: var(--gradient-primary); color: white; padding: 15px; }
+    td { padding: 15px; border-bottom: 1px solid #eee; }
+    tr:nth-child(even) { background-color: #f8f9fa; }
+    
+    /* ===== MODAL LOGIN ===== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+    
+    .modal {
+      background: white;
+      padding: 30px;
+      border-radius: var(--radius);
+      width: 90%;
+      max-width: 400px;
+      box-shadow: var(--shadow);
+    }
+    
+    .modal-input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+    }
+    
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .header-content { flex-direction: column; text-align: center; }
+      .header-stats { justify-content: center; }
+      .tabs { flex-direction: column; }
+      .tab { width: 100%; }
+      .section { padding: 20px; }
+      table { display: block; overflow-x: auto; }
+      .pwa-install-btn { bottom: 70px; right: 15px; }
+      .notificacion { left: 20px; right: 20px; max-width: none; }
+    }
+    
+    /* ===== UTILIDADES ===== */
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin: 25px 0; }
+    .flex { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+    .mt-20 { margin-top: 20px; }
+    .mb-20 { margin-bottom: 20px; }
+    .text-center { text-align: center; }
+  </style>
+</head>
+<body>
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="connection-status">
+      <span class="status-dot status-online" id="connectionDot"></span>
+      <span id="connectionText">Conectado</span>
+    </div>
+    <div class="user-profile" id="userProfile" style="display: none;">
+      <div class="user-avatar" id="userAvatar">U</div>
+      <span id="userEmail"></span>
+      <button class="btn-sm btn-danger" onclick="logout()">
+        <i class="fas fa-sign-out-alt"></i>
+      </button>
+    </div>
+    <button class="btn-sm" onclick="showLoginModal()" id="loginButton">
+      <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+    </button>
+  </div>
+
+  <!-- BOTÓN INSTALAR PWA -->
+  <button class="pwa-install-btn" id="installButton">
+    <i class="fas fa-download"></i> Instalar App
+  </button>
+
+  <!-- MODAL LOGIN -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal">
+      <h3 style="margin-top: 0;"><i class="fas fa-cloud"></i> Sincronización en la Nube</h3>
+      
+      <div id="loginForm">
+        <input type="email" class="modal-input" id="loginEmail" placeholder="Correo electrónico">
+        <input type="password" class="modal-input" id="loginPassword" placeholder="Contraseña">
+        
+        <div class="flex" style="justify-content: space-between; margin-top: 20px;">
+          <button class="btn" onclick="login()">
+            <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+          </button>
+          <button class="btn btn-success" onclick="showRegister()">
+            <i class="fas fa-user-plus"></i> Registrarse
+          </button>
+          <button class="btn btn-secondary" onclick="hideLoginModal()">
+            <i class="fas fa-times"></i> Cancelar
+          </button>
+        </div>
+      </div>
+      
+      <div id="registerForm" style="display: none;">
+        <input type="text" class="modal-input" id="registerName" placeholder="Nombre">
+        <input type="email" class="modal-input" id="registerEmail" placeholder="Correo electrónico">
+        <input type="password" class="modal-input" id="registerPassword" placeholder="Contraseña (mínimo 6 caracteres)">
+        
+        <div class="flex" style="justify-content: space-between; margin-top: 20px;">
+          <button class="btn btn-success" onclick="register()">
+            <i class="fas fa-check"></i> Crear Cuenta
+          </button>
+          <button class="btn btn-secondary" onclick="showLogin()">
+            <i class="fas fa-arrow-left"></i> Volver
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="header-content">
+        <div class="logo">
+          <span class="logo-icon">🍳</span>
+          <h1>ChefPortable PRO</h1>
+          <span class="version">v3.0</span>
+        </div>
+        <div class="header-stats">
+          <span class="stat">
+            <strong id="count-ingredientes">0</strong>
+            <small>Ingredientes</small>
+          </span>
+          <span class="stat">
+            <strong id="count-recetas">0</strong>
+            <small>Recetas</small>
+          </span>
+          <span class="stat">
+            <strong id="total-costo">€0.00</strong>
+            <small>Costo promedio</small>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="mostrarTab('ingredientes')">
+        <i class="fas fa-carrot"></i> Ingredientes
+      </button>
+      <button class="tab" onclick="mostrarTab('recetas')">
+        <i class="fas fa-book"></i> Recetas
+      </button>
+      <button class="tab" onclick="mostrarTab('calculos')">
+        <i class="fas fa-calculator"></i> Cálculos
+      </button>
+      <button class="tab" onclick="mostrarTab('nube')">
+        <i class="fas fa-cloud"></i> Nube
+      </button>
+      <button class="tab" onclick="mostrarTab('exportar')">
+        <i class="fas fa-download"></i> Exportar
+      </button>
+    </div>
+
+    <!-- TAB 1: INGREDIENTES -->
+    <div id="tab-ingredientes" class="tab-content active">
+      <section class="section">
+        <h2><i class="fas fa-paste"></i> 1. Cargar Ingredientes desde Texto</h2>
+        <p>Formato: <code>Nombre - Marca - Cantidad Unidad - €Precio</code></p>
+        <textarea id="textoIngredientes" rows="4" placeholder="Harina - Económica - 1 kg - €1.20
+Azúcar - Blanca - 500 g - €0.80
+Huevos - Granja - 12 unidades - €2.50"></textarea>
+        <button class="btn" onclick="procesarTextoIngredientes()">
+          <i class="fas fa-upload"></i> Cargar ingredientes
+        </button>
+        <div id="erroresIngParseo"></div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-edit"></i> 2. Registrar Ingrediente Manual</h2>
+        <label>Nombre del ingrediente</label>
+        <input id="ingNombre" placeholder="Ej: Harina, Azúcar, Huevos...">
+        <div id="marcasContainer"></div>
+        <div class="flex">
+          <button class="btn btn-success" onclick="addMarca()">
+            <i class="fas fa-plus"></i> Agregar Marca
+          </button>
+          <button class="btn" onclick="guardarIngrediente()">
+            <i class="fas fa-save"></i> Añadir ingrediente
+          </button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-list"></i> 3. Ingredientes Cargados</h2>
+        <button class="btn btn-secondary" onclick="renderIngredientes()">
+          <i class="fas fa-sync-alt"></i> Actualizar vista
+        </button>
+        <div id="tablaIngredientes" class="mt-20"></div>
+      </section>
+    </div>
+
+    <!-- TAB 2: RECETAS -->
+    <div id="tab-recetas" class="tab-content">
+      <section class="section">
+        <h2><i class="fas fa-plus-circle"></i> 1. Crear Nueva Receta</h2>
+        <div class="grid">
+          <div>
+            <label>Nombre de la receta</label>
+            <input id="recetaNombre" placeholder="Bizcocho de chocolate">
+          </div>
+          <div>
+            <label>Número de porciones</label>
+            <input type="number" id="porciones" value="4" min="1">
+          </div>
+        </div>
+        
+        <h3>Ingredientes</h3>
+        <div id="recetaIngContainer"></div>
+        
+        <div class="flex">
+          <button class="btn btn-success" onclick="addIngReceta()">
+            <i class="fas fa-plus"></i> Agregar Ingrediente
+          </button>
+          <button class="btn" onclick="calcularReceta()">
+            <i class="fas fa-calculator"></i> Calcular Costo
+          </button>
+          <button class="btn btn-success" onclick="guardarReceta()">
+            <i class="fas fa-save"></i> Guardar Receta
+          </button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-file-alt"></i> 2. Cargar Receta desde Texto</h2>
+        <textarea id="textoReceta" rows="6" placeholder="500 gramos de harina
+3 huevos
+200 ml de leche
+100 gramos de azúcar"></textarea>
+        <button class="btn" onclick="procesarTextoReceta()">
+          <i class="fas fa-magic"></i> Procesar Receta
+        </button>
+        <div id="erroresParseo"></div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-bookmark"></i> 3. Recetas Guardadas</h2>
+        <button class="btn btn-secondary" onclick="renderRecetas()">
+          <i class="fas fa-sync-alt"></i> Actualizar vista
+        </button>
+        <div id="tablaRecetas" class="mt-20"></div>
+      </section>
+    </div>
+
+    <!-- TAB 3: CÁLCULOS -->
+    <div id="tab-calculos" class="tab-content">
+      <section id="resultadoSection" class="section" style="display:none;">
+        <h2><i class="fas fa-chart-line"></i> Resultado del Cálculo</h2>
+        <div id="resultado"></div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-chart-bar"></i> Análisis de Costos</h2>
+        <div style="padding:20px; background:white; border-radius:10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+          <canvas id="costoChart"></canvas>
+        </div>
+        <button class="btn btn-secondary mt-20" onclick="actualizarGrafico()">
+          <i class="fas fa-redo"></i> Actualizar Gráfico
+        </button>
+      </section>
+    </div>
+
+    <!-- TAB 4: NUBE -->
+    <div id="tab-nube" class="tab-content">
+      <section class="section cloud-section">
+        <h2><i class="fas fa-cloud"></i> Estado de Sincronización</h2>
+        <div class="grid">
+          <div style="text-align: center; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+            <div style="font-size: 3rem; color: var(--primary); margin-bottom: 10px;">
+              <i class="fas fa-database"></i>
+            </div>
+            <div style="font-size: 1.2rem; font-weight: bold;">Datos Locales</div>
+            <div id="localStats"></div>
+          </div>
+          
+          <div style="text-align: center; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+            <div style="font-size: 3rem; color: var(--success); margin-bottom: 10px;">
+              <i class="fas fa-cloud"></i>
+            </div>
+            <div style="font-size: 1.2rem; font-weight: bold;">Datos en Nube</div>
+            <div id="cloudStats">No conectado</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section cloud-section">
+        <h2><i class="fas fa-sync-alt"></i> Control de Sincronización</h2>
+        
+        <div id="cloudLoginPrompt" class="text-center" style="padding: 40px;">
+          <div style="font-size: 4rem; color: #e9ecef; margin-bottom: 20px;">
+            <i class="fas fa-cloud"></i>
+          </div>
+          <h3>Accede a tus datos desde cualquier dispositivo</h3>
+          <p style="color: #6c757d; margin: 20px 0;">
+            Inicia sesión para sincronizar tus recetas e ingredientes en la nube.
+          </p>
+          <button class="btn" onclick="showLoginModal()" style="padding: 15px 30px; font-size: 1.1rem;">
+            <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+          </button>
+        </div>
+        
+        <div id="cloudControls" style="display: none;">
+          <div class="flex" style="gap: 10px; margin-bottom: 20px;">
+            <button class="btn" onclick="syncToCloud()">
+              <i class="fas fa-cloud-upload-alt"></i> Subir a la Nube
+            </button>
+            <button class="btn btn-success" onclick="syncFromCloud()">
+              <i class="fas fa-cloud-download-alt"></i> Descargar de la Nube
+            </button>
+            <button class="btn btn-warning" onclick="mergeData()">
+              <i class="fas fa-sync-alt"></i> Fusionar Datos
+            </button>
+          </div>
+          
+          <div id="cloudSyncStatus"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 5: EXPORTAR -->
+    <div id="tab-exportar" class="tab-content">
+      <section class="section">
+        <h2><i class="fas fa-save"></i> Guardar Datos</h2>
+        <button class="btn btn-success" onclick="guardarEnUSB()">
+          <i class="fas fa-download"></i> Guardar datos_recetas.json
+        </button>
+        <button class="btn btn-warning mt-20" onclick="cargarDesdeUSB()">
+          <i class="fas fa-file-import"></i> Cargar archivo JSON
+        </button>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-file-export"></i> Exportar Recetas</h2>
+        <div class="grid">
+          <button class="btn" onclick="exportarRecetasTexto()">
+            <i class="fas fa-file-alt"></i> Exportar a Texto
+          </button>
+          <button class="btn" onclick="exportarListaCompras()">
+            <i class="fas fa-shopping-cart"></i> Lista de Compras
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- NOTIFICACIONES -->
+    <div id="notificaciones"></div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // CONFIGURACIÓN FIREBASE - REEMPLAZA CON TUS DATOS
+    // ============================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyB-PW5HeeX9CyKXeFsrdOxUeMh1sLNmEFU",
+      authDomain: "chefportable-cbbfa.firebaseapp.com",
+      projectId: "chefportable-cbbfa",
+      storageBucket: "chefportable-cbbfa.firebasestorage.app",
+      messagingSenderId: "792158798814",
+      appId: "1:792158798814:web:58db15ea25c00b0139934f"
+    };
+
+    // ============================================================================
+    // VARIABLES GLOBALES - VERSIÓN CORREGIDA
+    // ============================================================================
+    
+    // Sistema de unidades
+    const TIPO_UNIDAD = {
+      g: 'masa', kg: 'masa',
+      ml: 'volumen', l: 'volumen',
+      taza: 'volumen', cucharada: 'volumen', cucharadita: 'volumen',
+      pizca: 'volumen', chorrito: 'volumen', vaso: 'volumen',
+      unidad: 'conteo', docena: 'conteo'
+    };
+
+    const FACTORES = {
+      masa: { g: 1, kg: 1000 },
+      volumen: { ml:1, l:1000, taza:240, cucharada:15, cucharadita:5, pizca:0.5, chorrito:5, vaso:200 },
+      conteo: { unidad:1, docena:12 }
+    };
+
+    // FUNCIÓN PARA CREAR DATOS SEGUROS
+    function crearDatosSeguros() {
+      return {
+        ingredientes: {},
+        recetas: [],
+        config: {
+          autoguardado: true,
+          ultimaModificacion: null,
+          syncEnabled: false,
+          lastCloudSync: null,
+          userId: null
+        }
+      };
+    }
+
+    // Inicializar datos con configuración segura
+    let datos = crearDatosSeguros();
+
+    // Variables para PWA y Cloud
+    let deferredPrompt = null;
+    let isOnline = navigator.onLine;
+    let isSyncing = false;
+    let firebaseApp = null;
+    let firestore = null;
+    let auth = null;
+    let currentUser = null;
+    let chartInstance = null;
+
+    // ============================================================================
+    // PWA - INSTALACIÓN
+    // ============================================================================
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('installButton').style.display = 'flex';
+    });
+
+    document.getElementById('installButton').addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        mostrarNotificacion('¡App instalada correctamente!', 'success');
+      }
+      
+      deferredPrompt = null;
+      document.getElementById('installButton').style.display = 'none';
+    });
+
+    if (window.matchMedia('(display-mode: standalone)').matches || 
+        window.navigator.standalone === true) {
+      document.getElementById('installButton').style.display = 'none';
+    }
+
+    // ============================================================================
+    // SERVICE WORKER
+    // ============================================================================
+    
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(registration => {
+          console.log('ServiceWorker registrado:', registration.scope);
+        }).catch(error => {
+          console.log('Error registrando ServiceWorker:', error);
+        });
+      });
+    }
+
+    // ============================================================================
+    // ONLINE/OFFLINE
+    // ============================================================================
+    
+    window.addEventListener('online', () => {
+      isOnline = true;
+      updateConnectionStatus();
+      mostrarNotificacion('Conectado a internet', 'success');
+    });
+
+    window.addEventListener('offline', () => {
+      isOnline = false;
+      updateConnectionStatus();
+      mostrarNotificacion('Sin conexión a internet', 'warning');
+    });
+
+    function updateConnectionStatus() {
+      const dot = document.getElementById('connectionDot');
+      const text = document.getElementById('connectionText');
+      
+      if (isOnline) {
+        dot.className = 'status-dot status-online';
+        text.textContent = 'Conectado';
+      } else {
+        dot.className = 'status-dot status-offline';
+        text.textContent = 'Sin conexión';
+      }
+      
+      if (isSyncing) {
+        dot.className = 'status-dot status-syncing';
+        text.textContent = 'Sincronizando...';
+      }
+    }
+
+    // ============================================================================
+    // FUNCIÓN DE VALIDACIÓN DE DATOS
+    // ============================================================================
+
+    function validarYEstructurarDatos() {
+      console.log('=== VALIDANDO ESTRUCTURA DE DATOS ===');
+      
+      // Validar ingredientes
+      if (!datos.ingredientes || typeof datos.ingredientes !== 'object') {
+        console.warn('Ingredientes inválidos, reinicializando...');
+        datos.ingredientes = {};
+      }
+      
+      // Validar recetas
+      if (!datos.recetas || !Array.isArray(datos.recetas)) {
+        console.warn('Recetas inválidas, reinicializando...');
+        datos.recetas = [];
+      }
+      
+      // VALIDAR CONFIG - ESTO ES CRÍTICO
+      if (!datos.config || typeof datos.config !== 'object') {
+        console.warn('Config inválida, creando nueva...');
+        datos.config = {
+          autoguardado: true,
+          ultimaModificacion: null,
+          syncEnabled: false,
+          lastCloudSync: null,
+          userId: null
+        };
+      }
+      
+      // Asegurar todas las propiedades de config
+      const configDefaults = {
+        autoguardado: true,
+        ultimaModificacion: null,
+        syncEnabled: false,
+        lastCloudSync: null,
+        userId: null
+      };
+      
+      for (const key in configDefaults) {
+        if (datos.config[key] === undefined) {
+          datos.config[key] = configDefaults[key];
+        }
+      }
+      
+      console.log('Datos validados correctamente');
+      return datos;
+    }
+
+    // ============================================================================
+    // FIREBASE - INICIALIZACIÓN SEGURA
+    // ============================================================================
+    
+    function initFirebase() {
+      try {
+        console.log('Inicializando Firebase...');
+        
+        // Primero validar datos
+        validarYEstructurarDatos();
+        
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        firestore = firebase.firestore();
+        
+        // Habilitar persistencia offline
+        firestore.enablePersistence()
+          .catch(err => {
+            console.warn('Error habilitando persistencia:', err);
+          });
+        
+        // Observador de autenticación - VERSIÓN SEGURA
+        auth.onAuthStateChanged(user => {
+          console.log('Estado de autenticación cambiado:', user ? 'Conectado' : 'Desconectado');
+          currentUser = user;
+          updateUserUI();
+          
+          // Validar datos antes de modificar
+          validarYEstructurarDatos();
+          
+          if (user) {
+            datos.config.userId = user.uid;
+            datos.config.syncEnabled = true;
+            mostrarNotificacion(`Bienvenido, ${user.email}`, 'success');
+          } else {
+            datos.config.userId = null;
+            datos.config.syncEnabled = false;
+          }
+          
+          // Guardar cambios
+          marcarModificacion();
+        });
+        
+        console.log('✅ Firebase inicializado correctamente');
+      } catch (error) {
+        console.error('❌ Error inicializando Firebase:', error);
+      }
+    }
+
+    // ============================================================================
+    // AUTENTICACIÓN FIREBASE
+    // ============================================================================
+    
+    function showLoginModal() {
+      document.getElementById('loginModal').style.display = 'flex';
+    }
+
+    function hideLoginModal() {
+      document.getElementById('loginModal').style.display = 'none';
+    }
+
+    function showRegister() {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('registerForm').style.display = 'block';
+    }
+
+    function showLogin() {
+      document.getElementById('registerForm').style.display = 'none';
+      document.getElementById('loginForm').style.display = 'block';
+    }
+
+    async function login() {
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      
+      if (!email || !password) {
+        mostrarNotificacion('Ingresa email y contraseña', 'error');
+        return;
+      }
+      
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+        hideLoginModal();
+        mostrarNotificacion('Sesión iniciada correctamente', 'success');
+      } catch (error) {
+        mostrarNotificacion(`Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function register() {
+      const name = document.getElementById('registerName').value;
+      const email = document.getElementById('registerEmail').value;
+      const password = document.getElementById('registerPassword').value;
+      
+      if (!name || !email || !password) {
+        mostrarNotificacion('Completa todos los campos', 'error');
+        return;
+      }
+      
+      if (password.length < 6) {
+        mostrarNotificacion('La contraseña debe tener al menos 6 caracteres', 'error');
+        return;
+      }
+      
+      try {
+        await auth.createUserWithEmailAndPassword(email, password);
+        
+        // Actualizar perfil
+        await auth.currentUser.updateProfile({
+          displayName: name
+        });
+        
+        hideLoginModal();
+        mostrarNotificacion('¡Cuenta creada exitosamente!', 'success');
+      } catch (error) {
+        mostrarNotificacion(`Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function logout() {
+      try {
+        await auth.signOut();
+        datos.config.userId = null;
+        datos.config.syncEnabled = false;
+        mostrarNotificacion('Sesión cerrada', 'info');
+      } catch (error) {
+        mostrarNotificacion(`Error: ${error.message}`, 'error');
+      }
+    }
+
+    function updateUserUI() {
+      const userProfile = document.getElementById('userProfile');
+      const loginButton = document.getElementById('loginButton');
+      const cloudControls = document.getElementById('cloudControls');
+      const cloudLoginPrompt = document.getElementById('cloudLoginPrompt');
+      
+      if (currentUser) {
+        userProfile.style.display = 'flex';
+        loginButton.style.display = 'none';
+        cloudControls.style.display = 'block';
+        cloudLoginPrompt.style.display = 'none';
+        
+        document.getElementById('userEmail').textContent = currentUser.email;
+        document.getElementById('userAvatar').textContent = 
+          currentUser.email.charAt(0).toUpperCase();
+      } else {
+        userProfile.style.display = 'none';
+        loginButton.style.display = 'block';
+        cloudControls.style.display = 'none';
+        cloudLoginPrompt.style.display = 'block';
+      }
+    }
+
+    // ============================================================================
+    // SINCRONIZACIÓN CON FIREBASE - VERSIÓN CORREGIDA
+    // ============================================================================
+    
+    async function syncToCloud() {
+      if (!currentUser) {
+        mostrarNotificacion('Inicia sesión para sincronizar', 'error');
+        return;
+      }
+      
+      if (!isOnline) {
+        mostrarNotificacion('Sin conexión a internet', 'error');
+        return;
+      }
+      
+      // Validar datos antes de continuar
+      validarYEstructurarDatos();
+      
+      isSyncing = true;
+      updateConnectionStatus();
+      
+      try {
+        const userRef = firestore.collection('users').doc(currentUser.uid);
+        const dataRef = userRef.collection('data').doc('appData');
+        
+        // Datos a guardar (estructura garantizada)
+        const dataToSave = {
+          ingredientes: datos.ingredientes,
+          recetas: datos.recetas,
+          config: {
+            autoguardado: datos.config.autoguardado,
+            ultimaModificacion: datos.config.ultimaModificacion,
+            syncEnabled: true,
+            lastCloudSync: new Date().toISOString(),
+            userId: currentUser.uid
+          }
+        };
+        
+        await dataRef.set(dataToSave);
+        
+        // Actualizar localmente
+        datos.config.lastCloudSync = new Date().toISOString();
+        datos.config.userId = currentUser.uid;
+        datos.config.syncEnabled = true;
+        
+        mostrarNotificacion('✅ Datos subidos a la nube', 'success');
+        updateCloudStats();
+      } catch (error) {
+        console.error('Error en syncToCloud:', error);
+        mostrarNotificacion(`❌ Error: ${error.message}`, 'error');
+      } finally {
+        isSyncing = false;
+        updateConnectionStatus();
+      }
+    }
+
+    async function syncFromCloud() {
+      if (!currentUser) {
+        mostrarNotificacion('Inicia sesión para sincronizar', 'error');
+        return;
+      }
+      
+      if (!isOnline) {
+        mostrarNotificacion('Sin conexión a internet', 'error');
+        return;
+      }
+      
+      isSyncing = true;
+      updateConnectionStatus();
+      
+      try {
+        const userRef = firestore.collection('users').doc(currentUser.uid);
+        const dataRef = userRef.collection('data').doc('appData');
+        const doc = await dataRef.get();
+        
+        if (doc.exists) {
+          const cloudData = doc.data();
+          console.log('Datos recibidos de Firebase:', cloudData);
+          
+          // Actualizar datos locales CON SEGURIDAD
+          if (cloudData.ingredientes) {
+            datos.ingredientes = cloudData.ingredientes;
+          }
+          
+          if (cloudData.recetas) {
+            datos.recetas = cloudData.recetas;
+          }
+          
+          // Manejar config de forma segura
+          if (cloudData.config && typeof cloudData.config === 'object') {
+            datos.config = {
+              autoguardado: cloudData.config.autoguardado !== undefined ? cloudData.config.autoguardado : true,
+              ultimaModificacion: cloudData.config.ultimaModificacion || null,
+              syncEnabled: true,
+              lastCloudSync: cloudData.config.lastCloudSync || new Date().toISOString(),
+              userId: currentUser.uid
+            };
+          } else {
+            // Si no hay config en la nube, crear una
+            datos.config = {
+              autoguardado: true,
+              ultimaModificacion: null,
+              syncEnabled: true,
+              lastCloudSync: new Date().toISOString(),
+              userId: currentUser.uid
+            };
+          }
+          
+          renderIngredientes();
+          renderRecetas();
+          actualizarEstadisticas();
+          actualizarSelects();
+          marcarModificacion();
+          
+          mostrarNotificacion('✅ Datos descargados de la nube', 'success');
+          updateLocalStats();
+        } else {
+          mostrarNotificacion('No hay datos en la nube', 'warning');
+        }
+      } catch (error) {
+        console.error('Error en syncFromCloud:', error);
+        mostrarNotificacion(`❌ Error: ${error.message}`, 'error');
+      } finally {
+        isSyncing = false;
+        updateConnectionStatus();
+      }
+    }
+
+    async function mergeData() {
+      if (!currentUser) {
+        mostrarNotificacion('Inicia sesión para sincronizar', 'error');
+        return;
+      }
+      
+      if (!isOnline) {
+        mostrarNotificacion('Sin conexión a internet', 'error');
+        return;
+      }
+      
+      isSyncing = true;
+      updateConnectionStatus();
+      
+      try {
+        const userRef = firestore.collection('users').doc(currentUser.uid);
+        const dataRef = userRef.collection('data').doc('appData');
+        const doc = await dataRef.get();
+        
+        if (doc.exists) {
+          const cloudData = doc.data();
+          
+          // Fusionar ingredientes
+          if (cloudData.ingredientes) {
+            for (const id in cloudData.ingredientes) {
+              if (!datos.ingredientes[id]) {
+                datos.ingredientes[id] = cloudData.ingredientes[id];
+              } else {
+                const existingBrands = new Set(datos.ingredientes[id].marcas.map(m => m.nombre));
+                if (cloudData.ingredientes[id].marcas) {
+                  for (const marca of cloudData.ingredientes[id].marcas) {
+                    if (!existingBrands.has(marca.nombre)) {
+                      datos.ingredientes[id].marcas.push(marca);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          // Fusionar recetas
+          if (cloudData.recetas) {
+            const existingRecipes = new Set(datos.recetas.map(r => r.nombre));
+            for (const recipe of cloudData.recetas) {
+              if (!existingRecipes.has(recipe.nombre)) {
+                datos.recetas.push(recipe);
+              }
+            }
+          }
+          
+          // Validar y actualizar config
+          validarYEstructurarDatos();
+          datos.config.lastCloudSync = new Date().toISOString();
+          datos.config.userId = currentUser.uid;
+          datos.config.syncEnabled = true;
+          
+          renderIngredientes();
+          renderRecetas();
+          actualizarEstadisticas();
+          actualizarSelects();
+          marcarModificacion();
+          
+          await syncToCloud();
+          
+          mostrarNotificacion('✅ Datos fusionados correctamente', 'success');
+        } else {
+          await syncToCloud();
+        }
+      } catch (error) {
+        console.error('Error en mergeData:', error);
+        mostrarNotificacion(`❌ Error: ${error.message}`, 'error');
+      } finally {
+        isSyncing = false;
+        updateConnectionStatus();
+      }
+    }
+
+    function updateCloudStats() {
+      if (!currentUser || !isOnline) {
+        document.getElementById('cloudStats').textContent = 'No conectado';
+        return;
+      }
+      
+      // Validar datos antes de acceder
+      validarYEstructurarDatos();
+      
+      document.getElementById('cloudStats').innerHTML = `
+        <div>Usuario: ${currentUser.email}</div>
+        <div>Última sincronización: ${datos.config.lastCloudSync ? new Date(datos.config.lastCloudSync).toLocaleString() : 'Nunca'}</div>
+      `;
+    }
+
+    function updateLocalStats() {
+      const localStatsDiv = document.getElementById('localStats');
+      localStatsDiv.innerHTML = `
+        <div><strong>${Object.keys(datos.ingredientes).length}</strong> ingredientes</div>
+        <div><strong>${datos.recetas.length}</strong> recetas</div>
+      `;
+    }
+
+    // ============================================================================
+    // FUNCIONES DE LA APLICACIÓN PRINCIPAL
+    // ============================================================================
+    
+    // Función para mostrar notificaciones
+    function mostrarNotificacion(mensaje, tipo = 'success', duracion = 3000) {
+      const notificaciones = document.getElementById('notificaciones');
+      const notif = document.createElement('div');
+      notif.className = `notificacion notificacion-${tipo}`;
+      
+      const iconos = {
+        success: 'fas fa-check-circle',
+        error: 'fas fa-exclamation-circle',
+        warning: 'fas fa-exclamation-triangle',
+        info: 'fas fa-info-circle'
+      };
+      
+      notif.innerHTML = `
+        <i class="${iconos[tipo]}"></i>
+        <span>${mensaje}</span>
+        <button onclick="this.parentElement.remove()" style="margin-left: auto; background: none; border: none; color: white; cursor: pointer;">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      
+      notificaciones.appendChild(notif);
+      
+      setTimeout(() => {
+        if (notif.parentNode) {
+          notif.style.opacity = '0';
+          notif.style.transform = 'translateX(100%)';
+          setTimeout(() => notif.remove(), 300);
+        }
+      }, duracion);
+    }
+
+    // Función para cambiar entre pestañas
+    function mostrarTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      document.getElementById(`tab-${tabId}`).classList.add('active');
+      document.querySelector(`.tab[onclick="mostrarTab('${tabId}')"]`).classList.add('active');
+    }
+
+    // Función para convertir unidades
+    function convertir(cant, unidad) {
+      const t = TIPO_UNIDAD[unidad];
+      if (!t) throw new Error(`Unidad inválida: ${unidad}`);
+      return cant * FACTORES[t][unidad];
+    }
+
+    // Función para actualizar estadísticas
+    function actualizarEstadisticas() {
+      // Validar datos primero
+      validarYEstructurarDatos();
+      
+      const countIng = Object.keys(datos.ingredientes).length;
+      const countRec = datos.recetas.length;
+      
+      let costoPromedio = 0;
+      if (datos.recetas.length > 0) {
+        const costos = datos.recetas.map(r => calcularCostoReceta(r));
+        costoPromedio = costos.reduce((a, b) => a + b, 0) / costos.length;
+      }
+      
+      document.getElementById('count-ingredientes').textContent = countIng;
+      document.getElementById('count-recetas').textContent = countRec;
+      document.getElementById('total-costo').textContent = `€${costoPromedio.toFixed(2)}`;
+      updateLocalStats();
+    }
+
+    // Función para marcar modificación
+    function marcarModificacion() {
+      // Validar datos antes de modificar
+      validarYEstructurarDatos();
+      
+      datos.config.ultimaModificacion = new Date().toISOString();
+      if (datos.config.autoguardado) {
+        autoGuardar();
+      }
+    }
+
+    // Función para autoguardar
+    function autoGuardar() {
+      try {
+        // Validar antes de guardar
+        validarYEstructurarDatos();
+        
+        localStorage.setItem('chefportable_data', JSON.stringify(datos));
+      } catch (e) {
+        console.warn('No se pudo guardar en localStorage:', e);
+      }
+    }
+
+    // Función para restaurar autoguardado
+    function restaurarAutoguardado() {
+      try {
+        const backup = localStorage.getItem('chefportable_data');
+        if (backup) {
+          const d = JSON.parse(backup);
+          
+          // Solo aceptar datos si tienen la estructura correcta
+          if (d && typeof d === 'object') {
+            // Mantener ingredientes si existen
+            if (d.ingredientes && typeof d.ingredientes === 'object') {
+              datos.ingredientes = d.ingredientes;
+            }
+            
+            // Mantener recetas si existen
+            if (d.recetas && Array.isArray(d.recetas)) {
+              datos.recetas = d.recetas;
+            }
+            
+            // Mantener config solo si es válido
+            if (d.config && typeof d.config === 'object') {
+              datos.config = {
+                autoguardado: d.config.autoguardado !== undefined ? d.config.autoguardado : true,
+                ultimaModificacion: d.config.ultimaModificacion || null,
+                syncEnabled: d.config.syncEnabled !== undefined ? d.config.syncEnabled : false,
+                lastCloudSync: d.config.lastCloudSync || null,
+                userId: d.config.userId || null
+              };
+            }
+            
+            console.log('✅ Datos cargados del almacenamiento local');
+            mostrarNotificacion('Datos cargados del almacenamiento local', 'info');
+          }
+        }
+      } catch (e) {
+        console.warn('Error cargando datos locales:', e);
+        // Si hay error, mantener los datos seguros por defecto
+        datos = crearDatosSeguros();
+      }
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA INGREDIENTES
+    // ============================================================================
+    
+    function selUnidades() {
+      return `
+        <option value="kg">kg</option><option value="g">g</option>
+        <option value="l">l</option><option value="ml">ml</option>
+        <option value="taza">taza</option><option value="cucharada">cucharada</option>
+        <option value="cucharadita">cucharadita</option>
+        <option value="vaso">vaso</option><option value="pizca">pizca</option>
+        <option value="unidad">unidad</option><option value="docena">docena</option>
+      `;
+    }
+
+    function crearMarca() {
+      const d = document.createElement('div');
+      d.className = 'marca-item';
+      d.innerHTML = `
+        <button class="remove"><i class="fas fa-times"></i></button>
+        <label>Marca</label>
+        <input class="n" placeholder="Nombre de la marca">
+        <label>Cantidad</label>
+        <input type="number" step="any" class="c" placeholder="1" min="0.01">
+        <label>Unidad</label>
+        <select class="u">${selUnidades()}</select>
+        <label>Precio (€)</label>
+        <input type="number" step="0.01" class="p" placeholder="1.50" min="0.01">
+      `;
+      d.querySelector('.remove').onclick = () => d.remove();
+      return d;
+    }
+
+    function addMarca() {
+      document.getElementById('marcasContainer').appendChild(crearMarca());
+    }
+
+    function guardarIngrediente() {
+      const nom = document.getElementById('ingNombre').value.trim();
+      if (!nom) {
+        mostrarNotificacion('El nombre del ingrediente es requerido', 'error');
+        return;
+      }
+      
+      const divs = document.querySelectorAll('.marca-item');
+      const marcas = [];
+      
+      for (let d of divs) {
+        const n = d.querySelector('.n').value.trim();
+        const c = parseFloat(d.querySelector('.c').value);
+        const u = d.querySelector('.u').value;
+        const p = parseFloat(d.querySelector('.p').value);
+        
+        if (!n || isNaN(c) || isNaN(p) || c <= 0 || p <= 0) {
+          mostrarNotificacion('Completa correctamente todas las marcas', 'error');
+          return;
+        }
+        
+        marcas.push({ 
+          nombre: n, 
+          presentacionCantidad: c, 
+          presentacionUnidad: u, 
+          precio: p
+        });
+      }
+      
+      if (marcas.length === 0) {
+        mostrarNotificacion('Agrega al menos una marca', 'error');
+        return;
+      }
+      
+      const id = nom.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_áéíóúñ]/g, '');
+      
+      if (datos.ingredientes[id]) {
+        const existentes = new Set(datos.ingredientes[id].marcas.map(m => m.nombre));
+        for (const m of marcas) {
+          if (!existentes.has(m.nombre)) {
+            datos.ingredientes[id].marcas.push(m);
+          }
+        }
+        mostrarNotificacion('✅ Ingrediente actualizado', 'success');
+      } else {
+        datos.ingredientes[id] = { 
+          nombre: nom, 
+          marcas
+        };
+        mostrarNotificacion('✅ Ingrediente añadido', 'success');
+      }
+      
+      marcarModificacion();
+      renderIngredientes();
+      actualizarSelects();
+      actualizarEstadisticas();
+      
+      document.getElementById('ingNombre').value = '';
+      document.getElementById('marcasContainer').innerHTML = '';
+      addMarca();
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA RECETAS
+    // ============================================================================
+    
+    function crearIngRecetaInput() {
+      const d = document.createElement('div');
+      d.className = 'ing-receta';
+      d.innerHTML = `
+        <button class="remove"><i class="fas fa-times"></i></button>
+        <label>Ingrediente</label>
+        <select class="id"><option value="">-- Selecciona ingrediente --</option></select>
+        <label>Cantidad</label>
+        <input type="number" step="any" class="c" placeholder="2" min="0.01">
+        <label>Unidad</label>
+        <select class="u">${selUnidades()}</select>
+      `;
+      d.querySelector('.remove').onclick = () => d.remove();
+      return d;
+    }
+
+    function actualizarSelects() {
+      document.querySelectorAll('.id').forEach(s => {
+        const v = s.value;
+        s.innerHTML = '<option value="">-- Selecciona ingrediente --</option>';
+        Object.keys(datos.ingredientes).forEach(k => {
+          const o = document.createElement('option');
+          o.value = k;
+          o.textContent = datos.ingredientes[k].nombre;
+          s.appendChild(o);
+        });
+        s.value = v;
+      });
+    }
+
+    function addIngReceta() {
+      const d = document.getElementById('recetaIngContainer');
+      d.appendChild(crearIngRecetaInput());
+      actualizarSelects();
+    }
+
+    function calcularCostoReceta(receta) {
+      let promT = 0;
+      
+      for (let item of receta.ingredientes) {
+        const ing = datos.ingredientes[item.id];
+        if (!ing) continue;
+        
+        const uso = convertir(item.cantidad, item.unidad);
+        const tipoUso = TIPO_UNIDAD[item.unidad];
+        const costos = ing.marcas
+          .filter(m => TIPO_UNIDAD[m.presentacionUnidad] === tipoUso)
+          .map(m => {
+            const pres = convertir(m.presentacionCantidad, m.presentacionUnidad);
+            return uso * (m.precio / pres);
+          });
+        
+        if (costos.length > 0) {
+          promT += costos.reduce((a,b)=>a+b)/costos.length;
+        }
+      }
+      
+      return promT;
+    }
+
+    function calcularReceta() {
+      const nom = document.getElementById('recetaNombre').value.trim();
+      const por = parseInt(document.getElementById('porciones').value) || 1;
+      const divs = document.querySelectorAll('.ing-receta');
+      const ings = [];
+      
+      for (let d of divs) {
+        const id = d.querySelector('.id').value;
+        const c = parseFloat(d.querySelector('.c').value);
+        const u = d.querySelector('.u').value;
+        if (!id || isNaN(c)) continue;
+        ings.push({ id, cantidad: c, unidad: u });
+      }
+      
+      if (ings.length === 0) {
+        mostrarNotificacion('Agrega al menos un ingrediente', 'error');
+        return;
+      }
+      
+      let minT = 0, maxT = 0, promT = 0;
+      const detalle = [];
+      
+      for (let item of ings) {
+        const ing = datos.ingredientes[item.id];
+        if (!ing) continue;
+        
+        const uso = convertir(item.cantidad, item.unidad);
+        const tipoUso = TIPO_UNIDAD[item.unidad];
+        const costos = ing.marcas
+          .filter(m => TIPO_UNIDAD[m.presentacionUnidad] === tipoUso)
+          .map(m => {
+            const pres = convertir(m.presentacionCantidad, m.presentacionUnidad);
+            return uso * (m.precio / pres);
+          });
+        
+        if (costos.length === 0) continue;
+        
+        const min = Math.min(...costos);
+        const max = Math.max(...costos);
+        const prom = costos.reduce((a,b)=>a+b)/costos.length;
+        
+        minT += min;
+        maxT += max;
+        promT += prom;
+        
+        detalle.push({
+          nombre: ing.nombre,
+          cantidad: item.cantidad,
+          unidad: item.unidad,
+          min,
+          max,
+          prom
+        });
+      }
+      
+      const resultadoHTML = `
+        <div class="grid">
+          <div style="text-align: center; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+            <h3 style="color: #dc2626; margin-bottom: 10px;">Mínimo</h3>
+            <div style="font-size: 2rem; font-weight: bold; color: #dc2626;">€${minT.toFixed(2)}</div>
+            <div style="color: #6c757d; margin-top: 10px;">€${(minT/por).toFixed(2)} por porción</div>
+          </div>
+          <div style="text-align: center; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+            <h3 style="color: #10b981; margin-bottom: 10px;">Promedio</h3>
+            <div style="font-size: 2rem; font-weight: bold; color: #10b981;">€${promT.toFixed(2)}</div>
+            <div style="color: #6c757d; margin-top: 10px;">€${(promT/por).toFixed(2)} por porción</div>
+          </div>
+          <div style="text-align: center; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+            <h3 style="color: #f59e0b; margin-bottom: 10px;">Máximo</h3>
+            <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">€${maxT.toFixed(2)}</div>
+            <div style="color: #6c757d; margin-top: 10px;">€${(maxT/por).toFixed(2)} por porción</div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('resultado').innerHTML = resultadoHTML;
+      document.getElementById('resultadoSection').style.display = 'block';
+      mostrarTab('calculos');
+      mostrarNotificacion('Cálculo completado correctamente', 'success');
+    }
+
+    function guardarReceta() {
+      const nom = document.getElementById('recetaNombre').value.trim();
+      const por = parseInt(document.getElementById('porciones').value) || 1;
+      
+      if (!nom) {
+        mostrarNotificacion('Nombre de receta requerido', 'error');
+        return;
+      }
+      
+      const divs = document.querySelectorAll('.ing-receta');
+      const ings = [];
+      
+      for (let d of divs) {
+        const id = d.querySelector('.id').value;
+        const c = parseFloat(d.querySelector('.c').value);
+        const u = d.querySelector('.u').value;
+        if (!id || isNaN(c)) continue;
+        ings.push({ id, cantidad: c, unidad: u });
+      }
+      
+      if (ings.length === 0) {
+        mostrarNotificacion('Agrega al menos un ingrediente', 'error');
+        return;
+      }
+      
+      const recetaExistente = datos.recetas.findIndex(r => r.nombre.toLowerCase() === nom.toLowerCase());
+      
+      if (recetaExistente >= 0) {
+        datos.recetas[recetaExistente] = { 
+          nombre: nom, 
+          porciones: por, 
+          ingredientes: ings
+        };
+        mostrarNotificacion('✅ Receta actualizada', 'success');
+      } else {
+        datos.recetas.push({ 
+          nombre: nom, 
+          porciones: por, 
+          ingredientes: ings
+        };
+        mostrarNotificacion('✅ Receta guardada', 'success');
+      }
+      
+      marcarModificacion();
+      renderRecetas();
+      actualizarEstadisticas();
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA PROCESAR TEXTO
+    // ============================================================================
+    
+    function parsearIngredientesTexto(texto) {
+      const lineas = texto.split('\n').map(l => l.trim()).filter(l => l);
+      const ingredientes = {};
+      const errores = [];
+
+      const mapaUnidades = {
+        'kg': 'kg', 'kilo': 'kg', 'kilos': 'kg',
+        'g': 'g', 'gramo': 'g', 'gramos': 'g',
+        'l': 'l', 'litro': 'l', 'litros': 'l',
+        'ml': 'ml', 'mililitro': 'ml', 'mililitros': 'ml',
+        'unidad': 'unidad', 'unidades': 'unidad',
+        'docena': 'docena', 'docenas': 'docena'
+      };
+
+      for (const linea of lineas) {
+        const partes = linea.split('-').map(p => p.trim());
+        if (partes.length < 4) {
+          errores.push(`Formato inválido: "${linea}"`);
+          continue;
+        }
+
+        const nombreIng = partes[0];
+        const marca = partes[1];
+        const presStr = partes[2];
+        const precioStr = partes[3];
+
+        const precioMatch = precioStr.match(/[\d,\.]+/);
+        if (!precioMatch) {
+          errores.push(`Precio inválido en: "${linea}"`);
+          continue;
+        }
+        const precio = parseFloat(precioMatch[0].replace(',', '.'));
+
+        const presMatch = presStr.match(/^([\d,\.]+)\s+([a-záéíóúñ\s]+)$/i);
+        if (!presMatch) {
+          errores.push(`Presentación inválida en: "${linea}"`);
+          continue;
+        }
+
+        const cant = parseFloat(presMatch[1].replace(',', '.'));
+        const unidadTxt = presMatch[2].toLowerCase().trim();
+        let unidad = mapaUnidades[unidadTxt] || mapaUnidades[unidadTxt.replace(/s$/, '')];
+
+        if (!unidad) {
+          errores.push(`Unidad desconocida: "${unidadTxt}" en "${linea}"`);
+          continue;
+        }
+
+        const id = nombreIng.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_');
+        if (!ingredientes[id]) {
+          ingredientes[id] = { nombre: nombreIng, marcas: [] };
+        }
+        ingredientes[id].marcas.push({ 
+          nombre: marca, 
+          presentacionCantidad: cant, 
+          presentacionUnidad: unidad, 
+          precio
+        });
+      }
+
+      return { ingredientes, errores };
+    }
+
+    function procesarTextoIngredientes() {
+      const texto = document.getElementById('textoIngredientes').value;
+      if (!texto.trim()) {
+        mostrarNotificacion('Pega ingredientes primero', 'warning');
+        return;
+      }
+
+      const { ingredientes, errores } = parsearIngredientesTexto(texto);
+      
+      for (const id in ingredientes) {
+        if (datos.ingredientes[id]) {
+          const existentes = new Set(datos.ingredientes[id].marcas.map(m => m.nombre));
+          for (const m of ingredientes[id].marcas) {
+            if (!existentes.has(m.nombre)) {
+              datos.ingredientes[id].marcas.push(m);
+            }
+          }
+        } else {
+          datos.ingredientes[id] = ingredientes[id];
+        }
+      }
+
+      const errDiv = document.getElementById('erroresIngParseo');
+      if (errores.length > 0) {
+        errDiv.innerHTML = '<div style="background:#fee; color:#c33; padding:15px; border-radius:8px;"><strong>Errores:</strong><br>' + errores.join('<br>') + '</div>';
+      } else {
+        errDiv.innerHTML = '<div style="color: #10b981;"><i class="fas fa-check"></i> Ingredientes cargados</div>';
+      }
+      
+      marcarModificacion();
+      renderIngredientes();
+      actualizarSelects();
+      actualizarEstadisticas();
+      
+      mostrarNotificacion('Ingredientes cargados correctamente', 'success');
+    }
+
+    function parsearRecetaTexto(texto) {
+      const lineas = texto
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l && 
+          !l.toLowerCase().includes('relleno') && 
+          !l.toLowerCase().includes('barnizar') && 
+          !l.toLowerCase().startsWith('para ')
+        );
+
+      const ingredientes = [];
+      const errores = [];
+
+      const mapaUnidades = {
+        'gramos': 'g', 'gramo': 'g',
+        'mililitros': 'ml', 'mililitro': 'ml',
+        'litros': 'l', 'litro': 'l',
+        'tazas': 'taza', 'taza': 'taza',
+        'cucharadas': 'cucharada', 'cucharada': 'cucharada',
+        'cucharaditas': 'cucharadita', 'cucharadita': 'cucharadita'
+      };
+
+      for (const linea of lineas) {
+        if (/^\d+\s+[a-záéíóúñ]/i.test(linea)) {
+          const partes = linea.split(' ');
+          const cant = parseFloat(partes[0]);
+          if (!isNaN(cant)) {
+            const resto = partes.slice(1).join(' ');
+            ingredientes.push({
+              id: resto.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_'),
+              nombre: resto,
+              cantidad: cant,
+              unidad: 'unidad'
+            });
+            continue;
+          }
+        }
+
+        const regex = /^(\d+\.?\d*)\s+([a-záéíóúñ]+(?:\s+[a-záéíóúñ]+)?)\s*(?:\([^)]*\))?\s+de\s+(.+)$/i;
+        const match = linea.match(regex);
+        if (!match) {
+          errores.push(`No se pudo parsear: "${linea}"`);
+          continue;
+        }
+
+        let [, cantStr, unidadTxt, nombre] = match;
+        const cant = parseFloat(cantStr);
+        let unidad = mapaUnidades[unidadTxt.toLowerCase()];
+
+        if (!unidad) {
+          errores.push(`Unidad desconocida: "${unidadTxt}" en "${linea}"`);
+          continue;
+        }
+
+        const id = nombre.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_');
+        ingredientes.push({ id, nombre: nombre.trim(), cantidad: cant, unidad });
+      }
+
+      return { ingredientes, errores };
+    }
+
+    function procesarTextoReceta() {
+      const texto = document.getElementById('textoReceta').value;
+      if (!texto.trim()) {
+        mostrarNotificacion('Pega una receta primero', 'warning');
+        return;
+      }
+
+      const { ingredientes, errores } = parsearRecetaTexto(texto);
+      const cont = document.getElementById('recetaIngContainer');
+      cont.innerHTML = '';
+
+      ingredientes.forEach(item => {
+        const div = crearIngRecetaInput();
+        div.querySelector('.c').value = item.cantidad;
+        if (div.querySelector(`.u option[value="${item.unidad}"]`)) {
+          div.querySelector('.u').value = item.unidad;
+        }
+        let idEncontrado = null;
+        for (const idDB in datos.ingredientes) {
+          const n1 = datos.ingredientes[idDB].nombre.toLowerCase();
+          const n2 = item.nombre.toLowerCase();
+          if (n1.includes(n2) || n2.includes(n1)) {
+            idEncontrado = idDB;
+            break;
+          }
+        }
+        if (idEncontrado) div.querySelector('.id').value = idEncontrado;
+        cont.appendChild(div);
+      });
+
+      const errDiv = document.getElementById('erroresParseo');
+      if (errores.length > 0) {
+        errDiv.innerHTML = '<div style="background:#fee; color:#c33; padding:15px; border-radius:8px;"><strong>Errores:</strong><br>' + errores.join('<br>') + '</div>';
+      } else {
+        errDiv.innerHTML = '<div style="color: #10b981;"><i class="fas fa-check"></i> Receta procesada</div>';
+      }
+      actualizarSelects();
+      mostrarNotificacion('Receta procesada correctamente', 'success');
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA VISUALIZACIÓN
+    // ============================================================================
+    
+    function renderIngredientes() {
+      const cont = document.getElementById('tablaIngredientes');
+      if (Object.keys(datos.ingredientes).length === 0) {
+        cont.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px;"><i class="fas fa-carrot fa-3x" style="color: #e9ecef; margin-bottom: 20px;"></i><p>No hay ingredientes cargados.</p></div>';
+        return;
+      }
+
+      let html = `<table>
+        <thead>
+          <tr>
+            <th>Ingrediente</th>
+            <th>Marca</th>
+            <th>Presentación</th>
+            <th>Precio (€)</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      for (const id in datos.ingredientes) {
+        const ing = datos.ingredientes[id];
+        ing.marcas.forEach((marca, idx) => {
+          html += `
+            <tr>
+              <td><strong>${ing.nombre}</strong></td>
+              <td>${marca.nombre}</td>
+              <td>${marca.presentacionCantidad} ${marca.presentacionUnidad}</td>
+              <td><strong>€${marca.precio.toFixed(2)}</strong></td>
+              <td>
+                <button class="btn btn-sm btn-warning" onclick="editarPrecio('${id}', ${idx})">
+                  <i class="fas fa-edit"></i> Editar
+                </button>
+              </td>
+            </tr>`;
+        });
+      }
+
+      html += `</tbody></table>`;
+      cont.innerHTML = html;
+    }
+
+    function renderRecetas() {
+      const cont = document.getElementById('tablaRecetas');
+      if (datos.recetas.length === 0) {
+        cont.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px;"><i class="fas fa-book fa-3x" style="color: #e9ecef; margin-bottom: 20px;"></i><p>No hay recetas guardadas.</p></div>';
+        return;
+      }
+
+      let html = `<table>
+        <thead>
+          <tr>
+            <th>Receta</th>
+            <th>Porciones</th>
+            <th>Ingredientes</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      datos.recetas.forEach((receta, i) => {
+        const ings = receta.ingredientes.map(item => {
+          const ing = datos.ingredientes[item.id];
+          return ing ? `${item.cantidad} ${item.unidad} ${ing.nombre}` : `??? (${item.id})`;
+        }).join('<br>');
+
+        html += `
+          <tr>
+            <td><strong>${receta.nombre}</strong></td>
+            <td>${receta.porciones} <small>porciones</small></td>
+            <td><small>${ings}</small></td>
+            <td>
+              <button class="btn btn-sm" onclick="cargarReceta(${i})">
+                <i class="fas fa-edit"></i> Editar
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="eliminarReceta(${i})">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>`;
+      });
+
+      html += `</tbody></table>`;
+      cont.innerHTML = html;
+    }
+
+    function editarPrecio(idIngrediente, idxMarca) {
+      const ing = datos.ingredientes[idIngrediente];
+      const marca = ing.marcas[idxMarca];
+      
+      const nuevoPrecio = prompt(`Nuevo precio para ${marca.nombre} (${ing.nombre}):`, marca.precio);
+      if (nuevoPrecio === null) return;
+      
+      const num = parseFloat(nuevoPrecio.replace(',', '.'));
+      if (isNaN(num) || num <= 0) {
+        mostrarNotificacion('Precio inválido', 'error');
+        return;
+      }
+      
+      marca.precio = num;
+      marcarModificacion();
+      renderIngredientes();
+      mostrarNotificacion('✅ Precio actualizado', 'success');
+    }
+
+    function cargarReceta(index) {
+      const receta = datos.recetas[index];
+      
+      document.getElementById('recetaNombre').value = receta.nombre;
+      document.getElementById('porciones').value = receta.porciones;
+      
+      const container = document.getElementById('recetaIngContainer');
+      container.innerHTML = '';
+      
+      receta.ingredientes.forEach(item => {
+        const div = crearIngRecetaInput();
+        div.querySelector('.id').value = item.id;
+        div.querySelector('.c').value = item.cantidad;
+        div.querySelector('.u').value = item.unidad;
+        container.appendChild(div);
+      });
+      
+      actualizarSelects();
+      mostrarTab('recetas');
+      mostrarNotificacion(`Receta "${receta.nombre}" cargada para edición`, 'info');
+    }
+
+    function eliminarReceta(index) {
+      const receta = datos.recetas[index];
+      
+      if (!confirm(`¿Eliminar la receta "${receta.nombre}"?`)) return;
+      
+      datos.recetas.splice(index, 1);
+      marcarModificacion();
+      renderRecetas();
+      actualizarEstadisticas();
+      mostrarNotificacion('✅ Receta eliminada', 'success');
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA GRÁFICOS
+    // ============================================================================
+    
+    function actualizarGrafico() {
+      const ctx = document.getElementById('costoChart').getContext('2d');
+      
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+      
+      const recetas = datos.recetas.slice(0, 10);
+      const labels = recetas.map(r => r.nombre);
+      const costos = recetas.map(r => calcularCostoReceta(r));
+      
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Costo Total (€)',
+            data: costos,
+            backgroundColor: '#4361ee',
+            borderColor: '#3a0ca3',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' },
+            title: { display: true, text: 'Costos de Recetas' }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Euros (€)' }
+            }
+          }
+        }
+      });
+      
+      mostrarNotificacion('Gráfico actualizado', 'success');
+    }
+
+    // ============================================================================
+    // FUNCIONES DE EXPORTACIÓN/IMPORTACIÓN
+    // ============================================================================
+    
+    function guardarEnUSB() {
+      const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'datos_recetas.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      mostrarNotificacion('✅ Archivo listo para descargar', 'success');
+    }
+
+    function cargarDesdeUSB() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const d = JSON.parse(reader.result);
+            if (d.ingredientes !== undefined && d.recetas !== undefined) {
+              datos = d;
+              validarYEstructurarDatos();
+              renderIngredientes();
+              renderRecetas();
+              actualizarSelects();
+              actualizarEstadisticas();
+              mostrarNotificacion('✅ Datos cargados correctamente', 'success');
+            } else {
+              mostrarNotificacion('❌ Archivo no válido', 'error');
+            }
+          } catch (err) {
+            mostrarNotificacion('❌ Error al leer el archivo', 'error');
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    function exportarRecetasTexto() {
+      let texto = '=== LISTA DE RECETAS ===\n\n';
+      
+      datos.recetas.forEach(receta => {
+        texto += `📝 ${receta.nombre}\n`;
+        texto += `Porciones: ${receta.porciones}\n`;
+        texto += `Ingredientes:\n`;
+        
+        receta.ingredientes.forEach(item => {
+          const ing = datos.ingredientes[item.id];
+          texto += `  • ${item.cantidad} ${item.unidad} de ${ing ? ing.nombre : '???'}\n`;
+        });
+        
+        texto += `\n`;
+      });
+      
+      const blob = new Blob([texto], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'recetas_exportadas.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      mostrarNotificacion('✅ Recetas exportadas a texto', 'success');
+    }
+
+    function exportarListaCompras() {
+      let texto = '=== LISTA DE COMPRAS ===\n\n';
+      
+      const ingredientesMap = {};
+      
+      datos.recetas.forEach(receta => {
+        receta.ingredientes.forEach(item => {
+          const ing = datos.ingredientes[item.id];
+          if (ing) {
+            if (!ingredientesMap[ing.nombre]) {
+              ingredientesMap[ing.nombre] = {
+                cantidad: 0,
+                unidad: item.unidad
+              };
+            }
+            ingredientesMap[ing.nombre].cantidad += item.cantidad;
+          }
+        });
+      });
+      
+      for (const nombre in ingredientesMap) {
+        const { cantidad, unidad } = ingredientesMap[nombre];
+        texto += `• ${cantidad} ${unidad} de ${nombre}\n`;
+      }
+      
+      const blob = new Blob([texto], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'lista_compras.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      mostrarNotificacion('✅ Lista de compras generada', 'success');
+    }
+
+    // ============================================================================
+    // INICIALIZACIÓN
+    // ============================================================================
+    
+    function init() {
+      console.log('=== INICIANDO CHEFPORTABLE PRO ===');
+      
+      // 1. Cargar datos locales
+      restaurarAutoguardado();
+      
+      // 2. Validar y estructurar datos (IMPORTANTE: antes de Firebase)
+      validarYEstructurarDatos();
+      
+      // 3. Inicializar Firebase
+      initFirebase();
+      
+      // 4. Inicializar UI
+      updateConnectionStatus();
+      actualizarEstadisticas();
+      updateLocalStats();
+      updateCloudStats();
+      
+      // 5. Inicializar formularios
+      if (document.getElementById('marcasContainer')) {
+        document.getElementById('marcasContainer').appendChild(crearMarca());
+      }
+      if (document.getElementById('recetaIngContainer')) {
+        document.getElementById('recetaIngContainer').appendChild(crearIngRecetaInput());
+      }
+      
+      // 6. Renderizar vistas
+      renderIngredientes();
+      renderRecetas();
+      actualizarSelects();
+      
+      // 7. Configurar autoguardado
+      setInterval(() => {
+        if (datos.config && datos.config.autoguardado) {
+          autoGuardar();
+        }
+      }, 300000); // Cada 5 minutos
+      
+      mostrarNotificacion('ChefPortable PRO cargado y listo', 'success');
+      
+      console.log('✅ APLICACIÓN INICIADA CORRECTAMENTE');
+    }
+
+    // ============================================================================
+    // MANEJADOR DE ERRORES GLOBAL
+    // ============================================================================
+    
+    window.addEventListener('error', function(e) {
+      if (e.message && e.message.includes('datos.config')) {
+        console.error('¡ERROR CRÍTICO! datos.config es undefined');
+        console.error('Forzando recreación de datos...');
+        
+        // Forzar recreación
+        datos = crearDatosSeguros();
+        validarYEstructurarDatos();
+        
+        // Intentar salvar la situación
+        try {
+          autoGuardar();
+        } catch (err) {
+          console.error('No se pudo guardar:', err);
+        }
+      }
+    });
+
+    // Iniciar la aplicación
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
