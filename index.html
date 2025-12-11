@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="theme-color" content="#4361ee">
-  <meta name="description" content="Calculadora de costos de recetas local">
+  <meta name="description" content="Calculadora de costos de recetas local con respaldo de seguridad.">
   
   <title>ChefPortable PRO - Local</title>
   
@@ -80,6 +80,7 @@
     
     .status-online { background: var(--online); }
     .status-offline { background: var(--offline); }
+    .status-syncing { background: var(--syncing); } /* Nuevo para estados de guardado */
     
     /* ===== BOTÓN INSTALAR PWA ===== */
     .pwa-install-btn {
@@ -244,6 +245,18 @@
     .btn-secondary { background: linear-gradient(135deg, #6c757d, #495057); }
     .btn-sm { padding: 8px 16px; font-size: 0.9rem; }
     
+    /* Estilo específico para el botón de respaldo URGENTE/ADVERTENCIA */
+    .btn-backup-urgent { 
+        background: linear-gradient(135deg, var(--danger), #ff9900) !important;
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(247, 37, 133, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(247, 37, 133, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(247, 37, 133, 0); }
+    }
+
     /* ===== TARJETAS ===== */
     .marca-item, .ing-receta {
       background: #f8fafc;
@@ -331,6 +344,7 @@
     .ves-cost { color: #6c757d; font-size: 1rem; margin-top: 5px; }
 
   </style>
+  <link rel="manifest" href="./manifest.json">
 </head>
 <body>
   <div class="status-bar">
@@ -363,7 +377,7 @@
         <div class="logo">
           <span class="logo-icon">🍳</span>
           <h1>ChefPortable PRO</h1>
-          <span class="version">v3.2 (VES/USD)</span>
+          <span class="version">v3.3 (Local/IndexDB)</span>
         </div>
         <div class="header-stats">
           <span class="stat">
@@ -509,13 +523,24 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
     <div id="tab-exportar" class="tab-content">
       <section class="section">
-        <h2><i class="fas fa-save"></i> Guardar y Cargar Datos</h2>
-        <button class="btn btn-success" onclick="guardarEnUSB()">
-          <i class="fas fa-download"></i> Guardar datos_recetas.json
-        </button>
+        <h2><i class="fas fa-shield-alt"></i> Guardado de Seguridad Local</h2>
+        <p style="margin-bottom: 20px;">Use esta función para descargar una copia física y evitar perder sus datos si borra la memoria de su navegador.</p>
+        
+        <div class="flex" style="flex-direction: column; align-items: stretch; gap: 10px;">
+            <button class="btn btn-success" onclick="guardarEnUSB(false)">
+                <i class="fas fa-download"></i> Guardar datos_recetas.json (Manual)
+            </button>
+            
+            <button class="btn btn-warning" id="backupPromptBtn" onclick="guardarEnUSB(true)">
+                <i class="fas fa-bell"></i> Generar Respaldo de Seguridad
+            </button>
+        </div>
+
         <button class="btn btn-warning mt-20" onclick="cargarDesdeUSB()">
-          <i class="fas fa-file-import"></i> Cargar archivo JSON
+            <i class="fas fa-file-import"></i> Cargar archivo JSON
         </button>
+        
+        <p id="lastBackupTime" class="mt-20" style="font-size: 0.9rem; font-style: italic;">Último respaldo manual: Nunca</p>
       </section>
 
       <section class="section">
@@ -536,49 +561,162 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
   <script>
     // ============================================================================
-    // VARIABLES GLOBALES
+    // VARIABLES GLOBALES (IndexDB y Backup)
     // ============================================================================
     let datos = {};
     let chartInstance = null;
     let deferredPrompt = null;
     let ingredienteIdAEditar = null; 
-    let tasaCambioBCV = 1.00; // Tasa por defecto: 1.00 (asume 1 USD = 1 USD si no se establece)
+    let tasaCambioBCV = 1.00; 
+
+    // Configuración IndexDB
+    const DB_NAME = 'ChefPortableDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'dataStore';
+    let dbIndex; // La referencia a la base de datos IndexedDB
+    
+    const diasParaBackup = 7; // Backup requerido cada 7 días
 
     // ============================================================================
-    // UTILIDADES DE CONVERSIÓN DE MONEDA (NUEVO BLOQUE)
+    // FUNCIONES DE IndexedDB (Guardado Robusto)
     // ============================================================================
+    
+    function crearDatosSeguros() {
+      return {
+        ingredientes: {},
+        recetas: [],
+        config: {
+          autoguardado: true,
+          ultimaModificacion: null,
+          tasaCambio: 1.00,
+          ultimoBackup: null, // NUEVO: Timestamp del último backup forzado
+        }
+      };
+    }
 
-    /**
-     * Convierte un monto de Dólares ($) a Bolívares (VES).
-     * @param {number} usd - Monto en Dólares (moneda interna).
-     * @returns {number} Monto en Bolívares.
-     */
+    function validarYEstructurarDatos() {
+      if (!datos.ingredientes || typeof datos.ingredientes !== 'object') { datos.ingredientes = {}; }
+      if (!datos.recetas || !Array.isArray(datos.recetas)) { datos.recetas = []; }
+      if (!datos.config || typeof datos.config !== 'object') { datos.config = crearDatosSeguros().config; }
+      
+      // Asegurarse de que el campo de backup exista
+      if (datos.config.ultimoBackup === undefined) { datos.config.ultimoBackup = null; }
+    }
+
+    // Inicializa y abre la base de datos IndexDB
+    function initIndexDB() {
+        return new Promise((resolve, reject) => {
+            if (dbIndex) { resolve(); return; } // Ya abierta
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+            request.onerror = (event) => {
+                console.error("Error al abrir IndexDB:", event.target.error);
+                mostrarNotificacion('Error de la BD local (IndexDB). El guardado puede fallar.', 'error');
+                reject(event.target.error);
+            };
+
+            request.onsuccess = (event) => {
+                dbIndex = event.target.result;
+                resolve();
+            };
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: "id" });
+                }
+            };
+        });
+    }
+
+    // Cargar datos desde IndexDB (Reemplaza la función de localStorage)
+    async function cargarDatosLocal() {
+        await initIndexDB(); // Asegurar que la DB esté abierta
+
+        return new Promise((resolve) => {
+            if (!dbIndex) {
+                datos = crearDatosSeguros();
+                resolve();
+                return;
+            }
+
+            const transaction = dbIndex.transaction([STORE_NAME], "readonly");
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get('config_data'); // Usamos una clave fija
+
+            request.onerror = (event) => {
+                console.warn("No se pudieron cargar datos de IndexDB. Usando datos por defecto.", event.target.error);
+                datos = crearDatosSeguros();
+                resolve();
+            };
+
+            request.onsuccess = (event) => {
+                if (event.target.result && event.target.result.data) {
+                    datos = event.target.result.data;
+                    validarYEstructurarDatos();
+                    
+                    // Cargar tasa de cambio guardada
+                    if (datos.config && datos.config.tasaCambio) {
+                        tasaCambioBCV = datos.config.tasaCambio;
+                    }
+                    mostrarNotificacion('Datos cargados del almacenamiento local robusto.', 'info');
+                } else {
+                    datos = crearDatosSeguros();
+                    mostrarNotificacion('No se encontraron datos. Iniciando nueva sesión.', 'warning');
+                }
+                resolve();
+            };
+        });
+    }
+
+    // Guardar datos en IndexDB (Reemplaza autoGuardar de localStorage)
+    async function autoGuardar() {
+        if (!dbIndex) {
+            console.error('Error: Base de datos IndexDB no inicializada. Guardado fallido.');
+            return;
+        }
+        
+        // Asegúrese de guardar la tasa de cambio y el timestamp
+        datos.config.tasaCambio = tasaCambioBCV; 
+
+        try {
+            const transaction = dbIndex.transaction([STORE_NAME], "readwrite");
+            const store = transaction.objectStore(STORE_NAME);
+            
+            // Almacenamos el objeto completo de datos con una clave 'config_data'
+            const dataToStore = { id: 'config_data', data: datos };
+            store.put(dataToStore); // put inserta o actualiza
+
+            // La notificación se maneja en 'marcarModificacion'
+        } catch (e) {
+             mostrarNotificacion('Error crítico al guardar datos localmente.', 'error');
+             console.error('Error al guardar en IndexDB:', e);
+        }
+    }
+
+    function marcarModificacion() {
+      datos.config.ultimaModificacion = new Date().toISOString();
+      autoGuardar();
+    }
+    
+    // ============================================================================
+    // UTILIDADES DE CONVERSIÓN DE MONEDA
+    // ============================================================================
     function usdToVes(usd) {
         return usd * tasaCambioBCV;
     }
 
-    /**
-     * Convierte un monto de Bolívares (VES) a Dólares ($).
-     * @param {number} ves - Monto en Bolívares.
-     * @returns {number} Monto en Dólares (moneda interna).
-     */
     function vesToUsd(ves) {
         if (tasaCambioBCV === 0 || isNaN(tasaCambioBCV)) return 0;
         return ves / tasaCambioBCV;
     }
 
-    /**
-     * Formatea un monto (que está en USD internamente) para mostrar ambas monedas.
-     * @param {number} usd - Monto en Dólares.
-     * @returns {string} Texto formateado (ej: "$1.50 / Bs. 54.75")
-     */
     function formatBothCurrencies(usd) {
         if (isNaN(usd) || !isFinite(usd)) return '$N/A / Bs. N/A';
         const ves = usdToVes(usd);
         return `$${usd.toFixed(2)} / Bs. ${ves.toFixed(2)}`;
     }
     
-    // Función para guardar la tasa y actualizar la interfaz
     function guardarTasaCambio() {
         const nuevaTasa = parseFloat(document.getElementById('inputTasaCambio').value);
 
@@ -588,79 +726,17 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
 
         tasaCambioBCV = nuevaTasa;
-        marcarModificacion(); // Esto llama a autoGuardar
-        actualizarVistas(); // Función que llamaremos para refrescar toda la UI
+        marcarModificacion(); 
+        actualizarVistas(); 
 
         mostrarNotificacion(`Tasa de cambio fijada: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}`, 'success');
     }
 
     // ============================================================================
-    // CONFIGURACIÓN DE DATOS LOCALES
+    // FUNCIONES DE LA APLICACIÓN PRINCIPAL Y UTILIDADES
+    // (RESTO DE FUNCIONES COMO mostrarTab, mostrarNotificacion, etc. SIN CAMBIOS MAYORES)
     // ============================================================================
-    function crearDatosSeguros() {
-      return {
-        ingredientes: {},
-        recetas: [],
-        config: {
-          autoguardado: true,
-          ultimaModificacion: null,
-          tasaCambio: 1.00, // Tasa de cambio inicial
-        }
-      };
-    }
-
-    function validarYEstructurarDatos() {
-      if (!datos.ingredientes || typeof datos.ingredientes !== 'object') { datos.ingredientes = {}; }
-      if (!datos.recetas || !Array.isArray(datos.recetas)) { datos.recetas = []; }
-      if (!datos.config || typeof datos.config !== 'object') { datos.config = { autoguardado: true, ultimaModificacion: null, tasaCambio: 1.00 }; }
-    }
-
-    function marcarModificacion() {
-      datos.config.ultimaModificacion = new Date().toISOString();
-      autoGuardar();
-    }
-
-    function autoGuardar() {
-      try {
-        // Asegúrese de guardar la tasa de cambio en la configuración
-        datos.config.tasaCambio = tasaCambioBCV; 
-        localStorage.setItem('chefportable_datos', JSON.stringify(datos));
-      } catch (e) {
-        console.error('Error al autoguardar en localStorage:', e);
-        mostrarNotificacion('Error al guardar datos. Revise el espacio de almacenamiento.', 'error');
-      }
-    }
-
-    function cargarDatosLocal() {
-      try {
-        const backup = localStorage.getItem('chefportable_datos');
-        if (backup) {
-          const d = JSON.parse(backup);
-          if (d && typeof d === 'object') {
-            datos = d;
-            validarYEstructurarDatos();
-            
-            // Cargar tasa de cambio guardada
-            if (datos.config && datos.config.tasaCambio) {
-                tasaCambioBCV = datos.config.tasaCambio;
-            }
-
-            mostrarNotificacion('Datos cargados del almacenamiento local', 'info');
-            return;
-          }
-        }
-        datos = crearDatosSeguros();
-        mostrarNotificacion('No se encontraron datos. Se inició una nueva sesión.', 'warning');
-      } catch (e) {
-        console.warn('Error cargando datos locales:', e);
-        datos = crearDatosSeguros();
-      }
-      validarYEstructurarDatos();
-    }
-
-    // ============================================================================
-    // FUNCIONES DE LA APLICACIÓN PRINCIPAL
-    // ============================================================================
+    
     function mostrarTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById(`tab-${tabId}`).classList.add('active');
@@ -669,6 +745,9 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
       
       if (tabId === 'calculos') {
         actualizarGrafico();
+      }
+      if (tabId === 'exportar') {
+        checkBackupStatus(); // Verificar el estado del backup al abrir la pestaña
       }
     }
 
@@ -704,9 +783,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
     }
 
-    // ============================================================================
-    // UTILIDADES DE UNIDADES Y CONVERSIÓN
-    // ============================================================================
+    // UTILIDADES DE UNIDADES Y CONVERSIÓN (Mantienen la misma lógica)
     function selUnidades(selected = 'unidad') {
       const units = [
         'kg', 'g', 'l', 'ml', 'taza', 'cucharada', 
@@ -753,7 +830,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         let count = 0;
         
         ing.marcas.forEach(m => {
-            // NOTA: m.precio está almacenado en USD (moneda base interna)
             const unidadBaseMarca = obtenerUnidadBase(m.presentacionUnidad);
             if (unidadBaseMarca === obtenerUnidadBase(unidadDeseada)) {
                 const cantidadBase = convertir(m.presentacionCantidad, m.presentacionUnidad);
@@ -768,7 +844,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         const costoPromedioUSD = count > 0 ? totalCostoUnitario / count : Infinity;
         const unidadReferencia = obtenerUnidadBase(unidadDeseada);
 
-        // Si la unidad deseada es "unidad", "pieza", etc., la base es la unidad misma (no conversión)
         if (TIPO_UNIDAD[unidadDeseada] === 'cantidad') {
             let totalCostoCant = 0;
             let countCant = 0;
@@ -785,22 +860,16 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         return { costo: costoPromedioUSD, unidad: unidadReferencia };
     }
 
-    // ============================================================================
-    // FUNCIONES PARA INGREDIENTES (INCLUYE EDICIÓN)
-    // ============================================================================
-    
-    // MODIFICADO: Ahora incluye selector de moneda
+
+    // Funciones de Ingredientes, Recetas, Cálculos (sin cambios en la lógica interna)
     function crearMarcaInput(marca = {}) {
       const d = document.createElement('div');
       d.className = 'marca-item';
 
-      // Recuperar el precio y la moneda para mostrarlo correctamente
       let precioMostrar = '';
       let monedaSeleccionada = 'usd';
 
       if (marca.precio) {
-          // El precio está guardado en USD.
-          // Usamos la moneda original (si existe) para decidir qué mostrar en el input
           monedaSeleccionada = marca.monedaOriginal || 'usd';
           
           if (monedaSeleccionada === 'ves') {
@@ -853,18 +922,15 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             return;
         }
 
-        // 1. Establecer el modo edición
         ingredienteIdAEditar = id;
         document.getElementById('guardarIngredienteBtn').innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
         document.getElementById('cancelarEdicionBtn').style.display = 'inline-flex';
         document.getElementById('ingredienteIdAEditar').value = id;
 
-        // 2. Cargar Nombre
         document.getElementById('ingNombre').value = ing.nombre;
         
-        // 3. Cargar Marcas
         const marcasContainer = document.getElementById('marcasContainer');
-        marcasContainer.innerHTML = ''; // Limpiar marcas existentes
+        marcasContainer.innerHTML = ''; 
         ing.marcas.forEach(marca => {
             addMarca(marca);
         });
@@ -873,7 +939,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             addMarca();
         }
 
-        // 4. Cambiar a la pestaña de ingredientes y enfocar el formulario
         mostrarTab('ingredientes');
         document.getElementById('formIngredienteSection').scrollIntoView({ behavior: 'smooth' });
         mostrarNotificacion(`Editando: ${ing.nombre}`, 'info');
@@ -890,7 +955,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         mostrarNotificacion('Edición cancelada.', 'info');
     }
 
-    // MODIFICADO: Lógica de conversión de precio (VES a USD) antes de guardar.
     function guardarIngrediente() {
       const nom = document.getElementById('ingNombre').value.trim();
       const marcasItems = document.querySelectorAll('.marca-item');
@@ -907,33 +971,32 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         const marcaNombre = item.querySelector('.m').value.trim() || 'Genérica';
         const cant = parseFloat(item.querySelector('.pc').value);
         const unidad = item.querySelector('.pu').value;
-        const moneda = item.querySelector('.moneda').value; // OBTENER MONEDA
+        const moneda = item.querySelector('.moneda').value; 
         const precioIngresado = parseFloat(item.querySelector('.p').value);
         
         if (isNaN(cant) || isNaN(precioIngresado) || cant <= 0 || (precioIngresado < 0)) { 
           erroresMarca = true;
-        } else {
-          
-          // *** CONVERSIÓN A USD PARA ALMACENAMIENTO INTERNO ***
-          let precioUSD = precioIngresado;
-          if (moneda === 'ves') {
-              if (tasaCambioBCV <= 0) {
-                  mostrarNotificacion('ERROR: La tasa de cambio debe ser > 0 para guardar en Bolívares.', 'error');
-                  erroresMarca = true;
-                  return;
-              }
-              precioUSD = vesToUsd(precioIngresado);
-          }
-          // **************************************************
+          return;
+        } 
+        
+        let precioUSD = precioIngresado;
+        if (moneda === 'ves') {
+            if (tasaCambioBCV <= 0) {
+                mostrarNotificacion('ERROR: La tasa de cambio debe ser > 0 para guardar en Bolívares.', 'error');
+                erroresMarca = true;
+                return;
+            }
+            precioUSD = vesToUsd(precioIngresado);
+        }
 
-          marcas.push({
+        marcas.push({
             nombre: marcaNombre,
             presentacionCantidad: cant,
             presentacionUnidad: unidad,
             precio: precioUSD, // Guardado en USD
             monedaOriginal: moneda // Guardar la moneda en la que se ingresó
-          });
-        }
+        });
+        
       });
       
       if (erroresMarca) {
@@ -965,9 +1028,8 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
       }
 
       marcarModificacion();
-      actualizarVistas(); // Actualizará la tabla y stats
+      actualizarVistas(); 
       
-      // Limpiar Formulario
       document.getElementById('ingNombre').value = '';
       document.getElementById('marcasContainer').innerHTML = '';
       addMarca();
@@ -988,7 +1050,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         mostrarNotificacion('✅ Ingrediente y sus referencias eliminados', 'success');
     }
 
-    // MODIFICADO: Permite la entrada con $ o Bs. en el texto.
     function procesarTextoIngredientes() {
         const texto = document.getElementById('textoIngredientes').value.trim();
         const lineas = texto.split('\n').filter(line => line.trim() !== '');
@@ -1007,7 +1068,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
             const [nombre, marca, cantidadUnidad, precioStr] = partes;
 
-            // 1. Parsear Cantidad y Unidad
             const match = cantidadUnidad.match(/(\d*\.?\d+)\s*([a-zA-Záéíóúñ]+)/);
             if (!match) {
                 errores.push(`Línea ${index + 1}: Formato de cantidad/unidad inválido.`);
@@ -1016,7 +1076,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             const cantidad = parseFloat(match[1]);
             const unidad = match[2].toLowerCase();
             
-            // 2. Parsear Moneda y Precio
             const monedaMatch = precioStr.match(/(\$|Bs\.?)\s*(\d*\.?\d+)/i);
             if (!monedaMatch) {
                 errores.push(`Línea ${index + 1}: Moneda o Precio inválidos. Use '$' o 'Bs.'.`);
@@ -1030,7 +1089,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                 return;
             }
 
-            // 3. Conversión a USD
             let precioUSD = precioIngresado;
             if (moneda === 'ves') {
                 if (tasaCambioBCV <= 0) {
@@ -1046,7 +1104,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                 datos.ingredientes[id] = { nombre: nombre, marcas: [] };
             }
 
-            // Evitar duplicar la misma marca si ya existe
             const marcaExistente = datos.ingredientes[id].marcas.find(m => 
                 m.nombre === marca && 
                 m.presentacionCantidad === cantidad && 
@@ -1082,7 +1139,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     }
 
 
-    // MODIFICADO: Muestra costos en USD y VES
     function renderIngredientes() {
       const cont = document.getElementById('tablaIngredientes');
       if (Object.keys(datos.ingredientes).length === 0) {
@@ -1100,7 +1156,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
         let marcasHtml = ing.marcas.map(m => {
             const unidadBase = obtenerUnidadBase(m.presentacionUnidad);
-            const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad); // m.precio ya es USD
+            const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad); 
 
             if (!isNaN(costoUnitarioUSD) && isFinite(costoUnitarioUSD)) {
                 totalCostoUnitarioUSD += costoUnitarioUSD;
@@ -1142,10 +1198,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
       cont.innerHTML = html;
     }
 
-    // ============================================================================
-    // FUNCIONES PARA RECETAS
-    // ============================================================================
-    
+
     function actualizarSelects() {
         const selects = document.querySelectorAll('.select-ingrediente');
         const options = Object.keys(datos.ingredientes).map(id => {
@@ -1185,7 +1238,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         let errores = [];
 
         receta.ingredientes.forEach((item, index) => {
-            // costoUnitario estará en USD
             const { costo: costoUnitarioUSD, unidad: unidadBase } = calcularCostoUnitario(item.id, item.unidad);
 
             if (costoUnitarioUSD === Infinity) {
@@ -1237,8 +1289,8 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             porciones: porciones,
             ingredientes: ingredientes,
             ultimaCalculada: null,
-            costo: 0, // Costo en USD
-            costoPorPorcion: 0, // Costo por porción en USD
+            costo: 0, 
+            costoPorPorcion: 0, 
         };
 
         const { costoTotalUSD, errores } = calcularCostoReceta(receta);
@@ -1250,7 +1302,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         receta.costoPorPorcion = costoTotalUSD / porciones;
         receta.ultimaCalculada = new Date().toISOString();
 
-        // Guardar o Actualizar
         const indexExistente = datos.recetas.findIndex(r => r.nombre === nombre);
         if (indexExistente !== -1) {
             datos.recetas[indexExistente] = receta;
@@ -1261,7 +1312,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
 
         marcarModificacion();
-        actualizarVistas(); // Actualizará la tabla y stats
+        actualizarVistas(); 
         document.getElementById('recetaNombre').value = '';
         document.getElementById('recetaIngContainer').innerHTML = '';
         addIngReceta();
@@ -1313,7 +1364,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         resultadoSection.scrollIntoView({ behavior: 'smooth' });
     }
 
-    // MODIFICADO: Muestra costos en USD y VES
     function renderRecetas() {
         const cont = document.getElementById('tablaRecetas');
         if (datos.recetas.length === 0) {
@@ -1324,7 +1374,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         let html = `<table> <thead> <tr> <th>Receta</th> <th>Porciones</th> <th>Costo Total</th> <th>Costo/Porción</th> <th>Acciones</th> </tr> </thead> <tbody>`;
 
         datos.recetas.forEach((receta, index) => {
-            // receta.costo y receta.costoPorPorcion están en USD
             html += `
                 <tr>
                     <td>${receta.nombre}</td>
@@ -1354,17 +1403,19 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         actualizarVistas();
         mostrarNotificacion('✅ Receta eliminada', 'success');
     }
+    
+    // Función de exportación de la lista de compras (Placeholder)
+    function exportarListaCompras() {
+        if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para calcular la lista de compras.', 'warning'); return; }
+        mostrarNotificacion('Esta función calcularía la lista total de ingredientes necesarios para producir todas las recetas.', 'info', 5000);
+    }
 
     // Funciones de PARSEO DE TEXTO (simplificadas)
     function procesarTextoReceta() {
         mostrarNotificacion('Esta función requiere que todos los ingredientes estén previamente cargados.', 'info', 5000);
     }
-
-    // ============================================================================
-    // FUNCIONES DE ESTADÍSTICAS Y GRÁFICO
-    // ============================================================================
-
-    // MODIFICADO: Muestra costos en USD y VES en el header
+    
+    // Funciones de estadísticas y gráfico (Mantienen la misma lógica)
     function actualizarEstadisticas() {
         document.getElementById('count-ingredientes').textContent = Object.keys(datos.ingredientes).length;
         document.getElementById('count-recetas').textContent = datos.recetas.length;
@@ -1377,8 +1428,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             let totalCostoUnitarioUSD = 0;
             let countMarcas = 0;
             ing.marcas.forEach(m => {
-                // m.precio ya es USD
-                const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad);
+                const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad); 
                 if (isFinite(costoUnitarioUSD) && costoUnitarioUSD > 0) {
                     totalCostoUnitarioUSD += costoUnitarioUSD;
                     countMarcas++;
@@ -1392,7 +1442,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         
         const costoPromedioUSD = countIngredientesValidos > 0 ? totalCostoIngredientesUSD / countIngredientesValidos : 0;
         
-        // Renderizar estadísticas del Header
         document.getElementById('total-costo-usd').textContent = `$${costoPromedioUSD.toFixed(2)}`;
         document.getElementById('total-costo-ves').textContent = `Bs. ${usdToVes(costoPromedioUSD).toFixed(2)}`;
     }
@@ -1400,7 +1449,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     function actualizarGrafico() {
         const ctx = document.getElementById('costoChart').getContext('2d');
         const labels = datos.recetas.map(r => r.nombre);
-        // Usamos el costo en USD para la gráfica
         const costosUSD = datos.recetas.map(r => r.costoPorPorcion.toFixed(2)); 
 
         if (chartInstance) {
@@ -1430,10 +1478,11 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     }
 
     // ============================================================================
-    // FUNCIONES DE EXPORTACIÓN/IMPORTACIÓN
+    // FUNCIONES DE EXPORTACIÓN/IMPORTACIÓN Y BACKUP FORZADO (MODIFICADAS)
     // ============================================================================
 
-    function guardarEnUSB() {
+    // Guardado de Respaldo: Agrega lógica para el respaldo forzado
+    function guardarEnUSB(esForzado = false) {
         const datosJSON = JSON.stringify(datos, null, 2);
         const blob = new Blob([datosJSON], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -1444,7 +1493,48 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        mostrarNotificacion('✅ Datos exportados como chefportable_datos.json', 'success', 5000);
+        
+        if (esForzado) {
+            // Actualiza el timestamp del último backup
+            datos.config.ultimoBackup = new Date().toISOString();
+            autoGuardar(); // Guardar el nuevo timestamp en IndexDB
+            
+            mostrarNotificacion('✅ Respaldo de seguridad guardado. Guárdelo en un lugar seguro.', 'success', 7000);
+            checkBackupStatus(); // Actualiza el botón de notificación
+        } else {
+            mostrarNotificacion('✅ Datos exportados como chefportable_datos.json', 'success', 5000);
+        }
+    }
+
+    // Verifica si el usuario debe realizar un nuevo backup
+    function checkBackupStatus() {
+        const backupTimeEl = document.getElementById('lastBackupTime');
+        const promptBtn = document.getElementById('backupPromptBtn');
+        
+        const lastBackup = datos.config.ultimoBackup ? new Date(datos.config.ultimoBackup) : null;
+        const now = new Date();
+        
+        if (!lastBackup) {
+            backupTimeEl.textContent = 'Último respaldo manual: ¡NUNCA!';
+            promptBtn.textContent = '¡URGENTE! Generar Primer Respaldo';
+            promptBtn.classList.add('btn-backup-urgent');
+            return;
+        }
+
+        const diffTime = Math.abs(now - lastBackup);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+        backupTimeEl.textContent = `Último respaldo manual: hace ${diffDays} días (${lastBackup.toLocaleDateString()})`;
+
+        if (diffDays >= diasParaBackup) {
+            promptBtn.textContent = `¡RESPALDO REQUERIDO! Han pasado ${diffDays} días`;
+            promptBtn.classList.add('btn-backup-urgent');
+            // Muestra una notificación persistente
+            mostrarNotificacion(`ADVERTENCIA: Han pasado ${diffDays} días sin respaldo. Por favor, genere un Respaldo de Seguridad.`, 'warning', 10000);
+        } else {
+            promptBtn.textContent = `Generar Respaldo de Seguridad (Próximo en ${diasParaBackup - diffDays} días)`;
+            promptBtn.classList.remove('btn-backup-urgent');
+        }
     }
 
     function cargarDesdeUSB() {
@@ -1459,10 +1549,10 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             reader.onload = function(e) {
                 try {
                     const loadedData = JSON.parse(e.target.result);
-                    if (loadedData.ingredientes && loadedData.recetas) {
-                        if (confirm('Se detectaron datos válidos. ¿Desea reemplazar los datos actuales (ingredientes y recetas) con el archivo cargado?')) {
+                    if (loadedData.ingredientes && loadedData.recetas && loadedData.config) {
+                        if (confirm('Se detectaron datos válidos. ¿Desea reemplazar los datos actuales con el archivo cargado?')) {
                             datos = loadedData;
-                            marcarModificacion();
+                            marcarModificacion(); // Forzar guardado en IndexDB
                             initApp(); // Reinicializar para renderizar todo
                             mostrarNotificacion('✅ Datos cargados y aplicación actualizada.', 'success');
                         }
@@ -1478,7 +1568,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         input.click();
     }
 
-    // MODIFICADO: Muestra costos en USD y VES en el TXT de exportación
     function exportarRecetasTexto() {
         if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para exportar.', 'warning'); return; }
 
@@ -1510,10 +1599,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         mostrarNotificacion('✅ Recetas exportadas a un archivo de texto.', 'success', 5000);
     }
 
-    function exportarListaCompras() {
-        if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para calcular la lista de compras.', 'warning'); return; }
-        mostrarNotificacion('Esta función calcularía la lista total de ingredientes necesarios para producir todas las recetas.', 'info', 5000);
-    }
 
     // ============================================================================
     // INICIALIZACIÓN
@@ -1521,25 +1606,24 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     
     // Función para refrescar todos los componentes de la interfaz
     function actualizarVistas() {
-        // 1. Mostrar la tasa de cambio actual
         document.getElementById('inputTasaCambio').value = tasaCambioBCV.toFixed(2);
         document.getElementById('displayTasaCambio').textContent = `Bs. ${tasaCambioBCV.toFixed(2)}`;
         
-        // 2. Refrescar todas las tablas y estadísticas
         renderIngredientes();
         renderRecetas();
         actualizarSelects();
         actualizarEstadisticas();
+        checkBackupStatus(); // Asegurar que el estado de backup se actualice
         if (document.querySelector('.tab-content.active').id === 'tab-calculos') {
             actualizarGrafico();
         }
     }
 
-    function initApp() {
-      cargarDatosLocal();
-      validarYEstructurarDatos();
+    async function initApp() {
+      // 1. Cargar datos de IndexDB (Esto inicializa IndexDB primero)
+      await cargarDatosLocal();
       
-      // PWA Install Prompt
+      // 2. Setup PWA, Service Worker, y Status Bar (Mismo código)
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
@@ -1562,7 +1646,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
           document.getElementById('installButton').style.display = 'none'; 
       }
 
-      // SERVICE WORKER
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then(registration => {
@@ -1573,25 +1656,30 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         });
       }
 
-      // ONLINE/OFFLINE
       window.addEventListener('online', () => { updateConnectionStatus(); mostrarNotificacion('Conectado a internet', 'success'); });
       window.addEventListener('offline', () => { updateConnectionStatus(); mostrarNotificacion('Sin conexión a internet', 'warning'); });
       updateConnectionStatus();
       
-      addMarca(); // Campo inicial para Ingrediente
-      addIngReceta(); // Campo inicial para Receta
+      // 3. Renderizado y Tareas Periódicas
+      addMarca(); 
+      addIngReceta(); 
       
-      actualizarVistas(); // Función que llama a renderizar todo
+      actualizarVistas(); 
       
+      // Intervalo de auto-guardado en IndexDB (Cada 5 minutos)
       setInterval(() => {
         if (datos.config && datos.config.autoguardado) {
           autoGuardar();
         }
       }, 300000); 
+
+      // Intervalo de verificación del backup (Cada 24 horas)
+      setInterval(checkBackupStatus, 1000 * 60 * 60 * 24); 
       
       console.log('✅ APLICACIÓN INICIADA CORRECTAMENTE');
     }
 
+    // Iniciar la aplicación
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initApp);
     } else {
