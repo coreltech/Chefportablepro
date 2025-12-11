@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#4361ee">
+  <meta name="description" content="Calculadora de costos de recetas local">
+  
+  <title>ChefPortable PRO - Local</title>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    /* ===== VARIABLES Y ESTILOS BASE ===== */
+    :root {
+      --primary: #4361ee;
+      --secondary: #3a0ca3;
+      --success: #4cc9f0;
+      --warning: #f8961e;
+      --danger: #f72585;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --card-bg: #ffffff;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      --radius: 12px;
+      --gradient-primary: linear-gradient(135deg, #4361ee, #3a0ca3);
+      --gradient-success: linear-gradient(135deg, #4cc9f0, #4895ef);
+      --online: #10b981;
+      --offline: #ef4444;
+      --syncing: #f59e0b;
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: 'Segoe UI', system-ui, sans-serif; 
+    }
+    
+    body { 
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      color: #333; 
+      min-height: 100vh;
+      padding: 20px;
+      padding-top: 60px;
+    }
+    
+    .container { max-width: 1200px; margin: 0 auto; }
+    
+    /* ===== STATUS BAR (SIMPLIFICADO) ===== */
+    .status-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+    
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    
+    .status-online { background: var(--online); }
+    .status-offline { background: var(--offline); }
+    
+    /* ===== BOTÓN INSTALAR PWA ===== */
+    .pwa-install-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--gradient-primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 50px;
+      box-shadow: 0 5px 20px rgba(67, 97, 238, 0.3);
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      z-index: 1000;
+      animation: bounce 2s infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    
+    /* ===== HEADER ===== */
+    .app-header {
+      background: var(--card-bg);
+      padding: 20px 30px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 25px;
+    }
+    
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .logo-icon { font-size: 2.5rem; color: var(--primary); }
+    h1 { color: var(--primary); font-size: 1.8rem; margin: 0; }
+    .version { background: #e9ecef; color: #6c757d; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; }
+    
+    .header-stats {
+      display: flex;
+      gap: 25px;
+      flex-wrap: wrap;
+    }
+    
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      min-width: 100px;
+    }
+    
+    .stat strong { font-size: 1.5rem; color: var(--primary); }
+    .stat small { color: #6c757d; font-size: 0.85rem; }
+    
+    /* ===== TABS ===== */
+    .tabs {
+      display: flex;
+      background: white;
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 25px;
+      box-shadow: var(--shadow);
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 18px;
+      background: none;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #6c757d;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    
+    .tab:hover { background: #f8f9fa; color: var(--primary); }
+    .tab.active { background: var(--gradient-primary); color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.5s ease-out; }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* ===== SECCIONES ===== */
+    .section {
+      background: var(--card-bg);
+      padding: 25px;
+      border-radius: var(--radius);
+      margin-bottom: 25px;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease;
+    }
+    
+    .section:hover { transform: translateY(-5px); }
+    
+    h2 { color: var(--primary); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e9ecef; }
+    h3 { color: var(--secondary); margin: 20px 0 15px; }
+    
+    /* ===== FORMULARIOS ===== */
+    label { display: block; margin: 15px 0 8px; font-weight: 600; color: #495057; }
+    
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s ease;
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+    }
+    
+    /* ===== BOTONES ===== */
+    .btn {
+      background: var(--gradient-primary);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 5px;
+    }
+    
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3); }
+    .btn-success { background: linear-gradient(135deg, #10b981, #059669); }
+    .btn-warning { background: linear-gradient(135deg, #f8961e, #f3722c); }
+    .btn-danger { background: linear-gradient(135deg, #f72585, #b5179e); }
+    .btn-secondary { background: linear-gradient(135deg, #6c757d, #495057); }
+    .btn-sm { padding: 8px 16px; font-size: 0.9rem; }
+    
+    /* ===== TARJETAS ===== */
+    .marca-item, .ing-receta {
+      background: #f8fafc;
+      border-left: 4px solid var(--primary);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 15px 0;
+      position: relative;
+    }
+    
+    .remove {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: var(--danger);
+      color: white;
+      border: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    
+    /* ===== NOTIFICACIONES ===== */
+    .notificacion {
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 10px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 400px;
+    }
+    
+    .notificacion-success { background: #10b981; color: white; }
+    .notificacion-error { background: #ef4444; color: white; }
+    .notificacion-warning { background: #f59e0b; color: white; }
+    .notificacion-info { background: #3b82f6; color: white; }
+    
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    
+    /* ===== TABLAS ===== */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    }
+    
+    th { background: var(--gradient-primary); color: white; padding: 15px; }
+    td { padding: 15px; border-bottom: 1px solid #eee; }
+    tr:nth-child(even) { background-color: #f8f9fa; }
+    
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .header-content { flex-direction: column; text-align: center; }
+      .header-stats { justify-content: center; }
+      .tabs { flex-direction: column; }
+      .tab { width: 100%; }
+      .section { padding: 20px; }
+      table { display: block; overflow-x: auto; }
+      .pwa-install-btn { bottom: 70px; right: 15px; }
+      .notificacion { left: 20px; right: 20px; max-width: none; }
+    }
+    
+    /* ===== UTILIDADES ===== */
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin: 25px 0; }
+    .flex { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+    .mt-20 { margin-top: 20px; }
+    .mb-20 { margin-bottom: 20px; }
+    .text-center { text-align: center; }
+    
+    /* ESTILOS ESPECÍFICOS DE MONEDA */
+    .usd-cost { color: var(--primary); font-size: 1.5rem; }
+    .ves-cost { color: #6c757d; font-size: 1rem; margin-top: 5px; }
+
+  </style>
+</head>
+<body>
+  <div class="status-bar">
+    <div class="connection-status">
+      <span class="status-dot status-online" id="connectionDot"></span>
+      <span id="connectionText">Conectado (Local)</span>
+    </div>
+  </div>
+
+  <button class="pwa-install-btn" id="installButton">
+    <i class="fas fa-download"></i> Instalar App
+  </button>
+
+  <div class="container">
+    <section class="section" style="margin-bottom: 25px; background: #e6f1ff; border: 1px solid var(--primary);">
+        <div class="header-content">
+            <h2 style="border-bottom: none; margin-bottom: 0;"><i class="fas fa-exchange-alt"></i> Tasa de Cambio BCV (VES / $)</h2>
+            <div class="flex">
+                <input type="number" step="0.01" id="inputTasaCambio" style="width: 150px; margin: 0;" placeholder="Ej: 36.50">
+                <button class="btn btn-success" onclick="guardarTasaCambio()">
+                    <i class="fas fa-save"></i> Fijar Tasa
+                </button>
+            </div>
+        </div>
+        <p style="margin-top: 10px; font-weight: 600;">$1.00 USD = <span id="displayTasaCambio" style="color: var(--secondary);">Bs. 0.00</span> VES</p>
+    </section>
+
+    <header class="app-header">
+      <div class="header-content">
+        <div class="logo">
+          <span class="logo-icon">🍳</span>
+          <h1>ChefPortable PRO</h1>
+          <span class="version">v3.2 (VES/USD)</span>
+        </div>
+        <div class="header-stats">
+          <span class="stat">
+            <strong id="count-ingredientes">0</strong>
+            <small>Ingredientes</small>
+          </span>
+          <span class="stat">
+            <strong id="count-recetas">0</strong>
+            <small>Recetas</small>
+          </span>
+          <span class="stat">
+            <strong id="total-costo-usd" class="usd-cost">$0.00</strong> 
+            <strong id="total-costo-ves" class="ves-cost">Bs. 0.00</strong>
+            <small>Costo promedio/unidad</small>
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" onclick="mostrarTab('ingredientes')">
+        <i class="fas fa-carrot"></i> Ingredientes
+      </button>
+      <button class="tab" onclick="mostrarTab('recetas')">
+        <i class="fas fa-book"></i> Recetas
+      </button>
+      <button class="tab" onclick="mostrarTab('calculos')">
+        <i class="fas fa-calculator"></i> Cálculos
+      </button>
+      <button class="tab" onclick="mostrarTab('exportar')">
+        <i class="fas fa-download"></i> Exportar
+      </button>
+    </div>
+
+    <div id="tab-ingredientes" class="tab-content active">
+      <section class="section">
+        <h2><i class="fas fa-paste"></i> 1. Cargar Ingredientes desde Texto</h2>
+        <p>Formato: <code>Nombre - Marca - Cantidad Unidad - $Precio (o Bs. Precio)</code></p>
+        <textarea id="textoIngredientes" rows="4" placeholder="Harina - Económica - 1 kg - $1.20
+Azúcar - Blanca - 500 g - Bs. 29.20
+Huevos - Granja - 12 unidades - $2.50"></textarea>
+        <button class="btn" onclick="procesarTextoIngredientes()">
+          <i class="fas fa-upload"></i> Cargar ingredientes
+        </button>
+        <div id="erroresIngParseo"></div>
+      </section>
+
+      <section class="section" id="formIngredienteSection">
+        <h2><i class="fas fa-edit"></i> 2. Registrar/Editar Ingrediente</h2>
+        <input type="hidden" id="ingredienteIdAEditar" value="">
+        <label>Nombre del ingrediente</label>
+        <input id="ingNombre" placeholder="Ej: Harina, Azúcar, Huevos...">
+        <div id="marcasContainer"></div>
+        <div class="flex">
+          <button class="btn btn-success" onclick="addMarca()">
+            <i class="fas fa-plus"></i> Agregar Marca
+          </button>
+          <button class="btn" id="guardarIngredienteBtn" onclick="guardarIngrediente()">
+            <i class="fas fa-save"></i> Añadir ingrediente
+          </button>
+          <button class="btn btn-secondary" id="cancelarEdicionBtn" style="display:none;" onclick="cancelarEdicionIngrediente()">
+            <i class="fas fa-times"></i> Cancelar Edición
+          </button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-list"></i> 3. Ingredientes Cargados</h2>
+        <button class="btn btn-secondary" onclick="renderIngredientes()">
+          <i class="fas fa-sync-alt"></i> Actualizar vista
+        </button>
+        <div id="tablaIngredientes" class="mt-20"></div>
+      </section>
+    </div>
+
+    <div id="tab-recetas" class="tab-content">
+      <section class="section">
+        <h2><i class="fas fa-plus-circle"></i> 1. Crear Nueva Receta</h2>
+        <div class="grid">
+          <div>
+            <label>Nombre de la receta</label>
+            <input id="recetaNombre" placeholder="Bizcocho de chocolate">
+          </div>
+          <div>
+            <label>Número de porciones</label>
+            <input type="number" id="porciones" value="4" min="1">
+          </div>
+        </div>
+        
+        <h3>Ingredientes</h3>
+        <div id="recetaIngContainer"></div>
+        
+        <div class="flex">
+          <button class="btn btn-success" onclick="addIngReceta()">
+            <i class="fas fa-plus"></i> Agregar Ingrediente
+          </button>
+          <button class="btn" onclick="calcularReceta()">
+            <i class="fas fa-calculator"></i> Calcular Costo
+          </button>
+          <button class="btn btn-success" onclick="guardarReceta()">
+            <i class="fas fa-save"></i> Guardar Receta
+          </button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-file-alt"></i> 2. Cargar Receta desde Texto</h2>
+        <textarea id="textoReceta" rows="6" placeholder="500 gramos de harina
+3 huevos
+200 ml de leche
+100 gramos de azúcar"></textarea>
+        <button class="btn" onclick="procesarTextoReceta()">
+          <i class="fas fa-magic"></i> Procesar Receta
+        </button>
+        <div id="erroresParseo"></div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-bookmark"></i> 3. Recetas Guardadas</h2>
+        <button class="btn btn-secondary" onclick="renderRecetas()">
+          <i class="fas fa-sync-alt"></i> Actualizar vista
+        </button>
+        <div id="tablaRecetas" class="mt-20"></div>
+      </section>
+    </div>
+
+    <div id="tab-calculos" class="tab-content">
+      <section id="resultadoSection" class="section" style="display:none;">
+        <h2><i class="fas fa-chart-line"></i> Resultado del Cálculo</h2>
+        <div id="resultado"></div>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-chart-bar"></i> Análisis de Costos</h2>
+        <div style="padding:20px; background:white; border-radius:10px; box-shadow: 0 3px 10px rgba(0,0,0,0.05);">
+          <canvas id="costoChart"></canvas>
+        </div>
+        <button class="btn btn-secondary mt-20" onclick="actualizarGrafico()">
+          <i class="fas fa-redo"></i> Actualizar Gráfico
+        </button>
+      </section>
+    </div>
+
+    <div id="tab-exportar" class="tab-content">
+      <section class="section">
+        <h2><i class="fas fa-save"></i> Guardar y Cargar Datos</h2>
+        <button class="btn btn-success" onclick="guardarEnUSB()">
+          <i class="fas fa-download"></i> Guardar datos_recetas.json
+        </button>
+        <button class="btn btn-warning mt-20" onclick="cargarDesdeUSB()">
+          <i class="fas fa-file-import"></i> Cargar archivo JSON
+        </button>
+      </section>
+
+      <section class="section">
+        <h2><i class="fas fa-file-export"></i> Exportar Recetas</h2>
+        <div class="grid">
+          <button class="btn" onclick="exportarRecetasTexto()">
+            <i class="fas fa-file-alt"></i> Exportar a Texto
+          </button>
+          <button class="btn" onclick="exportarListaCompras()">
+            <i class="fas fa-shopping-cart"></i> Lista de Compras
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div id="notificaciones"></div>
+  </div>
+
+  <script>
+    // ============================================================================
+    // VARIABLES GLOBALES
+    // ============================================================================
+    let datos = {};
+    let chartInstance = null;
+    let deferredPrompt = null;
+    let ingredienteIdAEditar = null; 
+    let tasaCambioBCV = 1.00; // Tasa por defecto: 1.00 (asume 1 USD = 1 USD si no se establece)
+
+    // ============================================================================
+    // UTILIDADES DE CONVERSIÓN DE MONEDA (NUEVO BLOQUE)
+    // ============================================================================
+
+    /**
+     * Convierte un monto de Dólares ($) a Bolívares (VES).
+     * @param {number} usd - Monto en Dólares (moneda interna).
+     * @returns {number} Monto en Bolívares.
+     */
+    function usdToVes(usd) {
+        return usd * tasaCambioBCV;
+    }
+
+    /**
+     * Convierte un monto de Bolívares (VES) a Dólares ($).
+     * @param {number} ves - Monto en Bolívares.
+     * @returns {number} Monto en Dólares (moneda interna).
+     */
+    function vesToUsd(ves) {
+        if (tasaCambioBCV === 0 || isNaN(tasaCambioBCV)) return 0;
+        return ves / tasaCambioBCV;
+    }
+
+    /**
+     * Formatea un monto (que está en USD internamente) para mostrar ambas monedas.
+     * @param {number} usd - Monto en Dólares.
+     * @returns {string} Texto formateado (ej: "$1.50 / Bs. 54.75")
+     */
+    function formatBothCurrencies(usd) {
+        if (isNaN(usd) || !isFinite(usd)) return '$N/A / Bs. N/A';
+        const ves = usdToVes(usd);
+        return `$${usd.toFixed(2)} / Bs. ${ves.toFixed(2)}`;
+    }
+    
+    // Función para guardar la tasa y actualizar la interfaz
+    function guardarTasaCambio() {
+        const nuevaTasa = parseFloat(document.getElementById('inputTasaCambio').value);
+
+        if (isNaN(nuevaTasa) || nuevaTasa <= 0) {
+            mostrarNotificacion('Por favor, ingrese una tasa de cambio válida (mayor a cero).', 'error');
+            return;
+        }
+
+        tasaCambioBCV = nuevaTasa;
+        marcarModificacion(); // Esto llama a autoGuardar
+        actualizarVistas(); // Función que llamaremos para refrescar toda la UI
+
+        mostrarNotificacion(`Tasa de cambio fijada: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}`, 'success');
+    }
+
+    // ============================================================================
+    // CONFIGURACIÓN DE DATOS LOCALES
+    // ============================================================================
+    function crearDatosSeguros() {
+      return {
+        ingredientes: {},
+        recetas: [],
+        config: {
+          autoguardado: true,
+          ultimaModificacion: null,
+          tasaCambio: 1.00, // Tasa de cambio inicial
+        }
+      };
+    }
+
+    function validarYEstructurarDatos() {
+      if (!datos.ingredientes || typeof datos.ingredientes !== 'object') { datos.ingredientes = {}; }
+      if (!datos.recetas || !Array.isArray(datos.recetas)) { datos.recetas = []; }
+      if (!datos.config || typeof datos.config !== 'object') { datos.config = { autoguardado: true, ultimaModificacion: null, tasaCambio: 1.00 }; }
+    }
+
+    function marcarModificacion() {
+      datos.config.ultimaModificacion = new Date().toISOString();
+      autoGuardar();
+    }
+
+    function autoGuardar() {
+      try {
+        // Asegúrese de guardar la tasa de cambio en la configuración
+        datos.config.tasaCambio = tasaCambioBCV; 
+        localStorage.setItem('chefportable_datos', JSON.stringify(datos));
+      } catch (e) {
+        console.error('Error al autoguardar en localStorage:', e);
+        mostrarNotificacion('Error al guardar datos. Revise el espacio de almacenamiento.', 'error');
+      }
+    }
+
+    function cargarDatosLocal() {
+      try {
+        const backup = localStorage.getItem('chefportable_datos');
+        if (backup) {
+          const d = JSON.parse(backup);
+          if (d && typeof d === 'object') {
+            datos = d;
+            validarYEstructurarDatos();
+            
+            // Cargar tasa de cambio guardada
+            if (datos.config && datos.config.tasaCambio) {
+                tasaCambioBCV = datos.config.tasaCambio;
+            }
+
+            mostrarNotificacion('Datos cargados del almacenamiento local', 'info');
+            return;
+          }
+        }
+        datos = crearDatosSeguros();
+        mostrarNotificacion('No se encontraron datos. Se inició una nueva sesión.', 'warning');
+      } catch (e) {
+        console.warn('Error cargando datos locales:', e);
+        datos = crearDatosSeguros();
+      }
+      validarYEstructurarDatos();
+    }
+
+    // ============================================================================
+    // FUNCIONES DE LA APLICACIÓN PRINCIPAL
+    // ============================================================================
+    function mostrarTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tabId}`).classList.add('active');
+      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.tab[onclick*="${tabId}"]`).classList.add('active');
+      
+      if (tabId === 'calculos') {
+        actualizarGrafico();
+      }
+    }
+
+    function mostrarNotificacion(mensaje, tipo = 'success', duracion = 3000) {
+      const notificaciones = document.getElementById('notificaciones');
+      const notif = document.createElement('div');
+      notif.className = `notificacion notificacion-${tipo}`;
+      const iconos = { success: 'fas fa-check-circle', error: 'fas fa-exclamation-circle', warning: 'fas fa-exclamation-triangle', info: 'fas fa-info-circle' };
+      notif.innerHTML = `
+        <i class="${iconos[tipo]}"></i> <span>${mensaje}</span>
+        <button onclick="this.parentElement.remove()" style="margin-left: auto; background: none; border: none; color: white; cursor: pointer;">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      notificaciones.appendChild(notif);
+      setTimeout(() => {
+        if (notif.parentNode) {
+          notif.style.opacity = '0';
+          setTimeout(() => notif.remove(), 300);
+        }
+      }, duracion);
+    }
+    
+    function updateConnectionStatus() {
+        const dot = document.getElementById('connectionDot');
+        const text = document.getElementById('connectionText');
+        if (navigator.onLine) {
+            dot.className = 'status-dot status-online';
+            text.textContent = 'Conectado (Local)';
+        } else {
+            dot.className = 'status-dot status-offline';
+            text.textContent = 'Sin conexión (Local)';
+        }
+    }
+
+    // ============================================================================
+    // UTILIDADES DE UNIDADES Y CONVERSIÓN
+    // ============================================================================
+    function selUnidades(selected = 'unidad') {
+      const units = [
+        'kg', 'g', 'l', 'ml', 'taza', 'cucharada', 
+        'cucharadita', 'vaso', 'pizca', 'unidad', 
+        'docena', 'pieza'
+      ];
+      return units.map(u => 
+        `<option value="${u}" ${u === selected ? 'selected' : ''}>${u}</option>`
+      ).join('');
+    }
+
+    const TIPO_UNIDAD = {
+      'kg': 'peso', 'g': 'peso', 
+      'l': 'volumen', 'ml': 'volumen', 
+      'taza': 'volumen', 'vaso': 'volumen',
+      'cucharada': 'volumen', 'cucharadita': 'volumen',
+      'unidad': 'cantidad', 'docena': 'cantidad', 'pieza': 'cantidad',
+      'pizca': 'cantidad'
+    };
+
+    function convertir(cantidad, unidad) {
+      if (unidad === 'kg') return cantidad * 1000; 
+      if (unidad === 'l') return cantidad * 1000; 
+      if (unidad === 'docena') return cantidad * 12; 
+      if (unidad === 'taza') return cantidad * 240; 
+      if (unidad === 'cucharada') return cantidad * 15; 
+      if (unidad === 'cucharadita') return cantidad * 5; 
+      if (unidad === 'vaso') return cantidad * 200; 
+      return cantidad; 
+    }
+
+    function obtenerUnidadBase(unidad) {
+        const tipo = TIPO_UNIDAD[unidad] || 'cantidad';
+        if (tipo === 'peso') return 'g';
+        if (tipo === 'volumen') return 'ml';
+        return 'unidad';
+    }
+
+    function calcularCostoUnitario(ingredienteId, unidadDeseada) {
+        const ing = datos.ingredientes[ingredienteId];
+        if (!ing || ing.marcas.length === 0) return { costo: Infinity, unidad: unidadDeseada };
+
+        let totalCostoUnitario = 0;
+        let count = 0;
+        
+        ing.marcas.forEach(m => {
+            // NOTA: m.precio está almacenado en USD (moneda base interna)
+            const unidadBaseMarca = obtenerUnidadBase(m.presentacionUnidad);
+            if (unidadBaseMarca === obtenerUnidadBase(unidadDeseada)) {
+                const cantidadBase = convertir(m.presentacionCantidad, m.presentacionUnidad);
+                const costoUnitario = m.precio / cantidadBase; // Costo por unidad base en USD
+                if (!isNaN(costoUnitario) && isFinite(costoUnitario)) {
+                    totalCostoUnitario += costoUnitario;
+                    count++;
+                }
+            }
+        });
+        
+        const costoPromedioUSD = count > 0 ? totalCostoUnitario / count : Infinity;
+        const unidadReferencia = obtenerUnidadBase(unidadDeseada);
+
+        // Si la unidad deseada es "unidad", "pieza", etc., la base es la unidad misma (no conversión)
+        if (TIPO_UNIDAD[unidadDeseada] === 'cantidad') {
+            let totalCostoCant = 0;
+            let countCant = 0;
+            ing.marcas.filter(m => TIPO_UNIDAD[m.presentacionUnidad] === 'cantidad').forEach(m => {
+                const costoCant = m.precio / m.presentacionCantidad; // Costo por unidad en USD
+                if (!isNaN(costoCant) && isFinite(costoCant)) {
+                    totalCostoCant += costoCant;
+                    countCant++;
+                }
+            });
+            return { costo: countCant > 0 ? totalCostoCant / countCant : Infinity, unidad: unidadDeseada };
+        }
+        
+        return { costo: costoPromedioUSD, unidad: unidadReferencia };
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA INGREDIENTES (INCLUYE EDICIÓN)
+    // ============================================================================
+    
+    // MODIFICADO: Ahora incluye selector de moneda
+    function crearMarcaInput(marca = {}) {
+      const d = document.createElement('div');
+      d.className = 'marca-item';
+
+      // Recuperar el precio y la moneda para mostrarlo correctamente
+      let precioMostrar = '';
+      let monedaSeleccionada = 'usd';
+
+      if (marca.precio) {
+          // El precio está guardado en USD.
+          // Usamos la moneda original (si existe) para decidir qué mostrar en el input
+          monedaSeleccionada = marca.monedaOriginal || 'usd';
+          
+          if (monedaSeleccionada === 'ves') {
+              precioMostrar = usdToVes(marca.precio).toFixed(2);
+          } else {
+              precioMostrar = marca.precio.toFixed(2);
+          }
+      }
+
+      d.innerHTML = `
+        <button class="remove" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+        <label>Marca/Presentación</label>
+        <input class="m" value="${marca.nombre || ''}" placeholder="Ej: Bolsa de 1kg, Hacendado, Caja de 12">
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>Cantidad</label>
+            <input type="number" step="any" class="pc" value="${marca.presentacionCantidad || ''}" placeholder="1">
+          </div>
+          <div>
+            <label>Unidad</label>
+            <select class="pu">${selUnidades(marca.presentacionUnidad || 'unidad')}</select>
+          </div>
+        </div>
+        <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 15px;">
+            <div>
+                <label>Moneda</label>
+                <select class="moneda">
+                    <option value="usd" ${monedaSeleccionada === 'usd' ? 'selected' : ''}>$ USD</option>
+                    <option value="ves" ${monedaSeleccionada === 'ves' ? 'selected' : ''}>Bs. VES</option>
+                </select>
+            </div>
+            <div>
+                <label>Precio</label>
+                <input type="number" step="0.01" class="p" value="${precioMostrar}" placeholder="1.20">
+            </div>
+        </div>
+      `;
+      return d;
+    }
+
+    function addMarca(marca) {
+      const container = document.getElementById('marcasContainer');
+      container.appendChild(crearMarcaInput(marca));
+    }
+    
+    function cargarIngredienteParaEdicion(id) {
+        const ing = datos.ingredientes[id];
+        if (!ing) {
+            mostrarNotificacion('Ingrediente no encontrado.', 'error');
+            return;
+        }
+
+        // 1. Establecer el modo edición
+        ingredienteIdAEditar = id;
+        document.getElementById('guardarIngredienteBtn').innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
+        document.getElementById('cancelarEdicionBtn').style.display = 'inline-flex';
+        document.getElementById('ingredienteIdAEditar').value = id;
+
+        // 2. Cargar Nombre
+        document.getElementById('ingNombre').value = ing.nombre;
+        
+        // 3. Cargar Marcas
+        const marcasContainer = document.getElementById('marcasContainer');
+        marcasContainer.innerHTML = ''; // Limpiar marcas existentes
+        ing.marcas.forEach(marca => {
+            addMarca(marca);
+        });
+
+        if (ing.marcas.length === 0) {
+            addMarca();
+        }
+
+        // 4. Cambiar a la pestaña de ingredientes y enfocar el formulario
+        mostrarTab('ingredientes');
+        document.getElementById('formIngredienteSection').scrollIntoView({ behavior: 'smooth' });
+        mostrarNotificacion(`Editando: ${ing.nombre}`, 'info');
+    }
+
+    function cancelarEdicionIngrediente() {
+        ingredienteIdAEditar = null;
+        document.getElementById('ingredienteIdAEditar').value = '';
+        document.getElementById('ingNombre').value = '';
+        document.getElementById('marcasContainer').innerHTML = '';
+        document.getElementById('guardarIngredienteBtn').innerHTML = '<i class="fas fa-save"></i> Añadir ingrediente';
+        document.getElementById('cancelarEdicionBtn').style.display = 'none';
+        addMarca(); 
+        mostrarNotificacion('Edición cancelada.', 'info');
+    }
+
+    // MODIFICADO: Lógica de conversión de precio (VES a USD) antes de guardar.
+    function guardarIngrediente() {
+      const nom = document.getElementById('ingNombre').value.trim();
+      const marcasItems = document.querySelectorAll('.marca-item');
+      
+      if (nom === '') {
+        mostrarNotificacion('El nombre del ingrediente es obligatorio.', 'error');
+        return;
+      }
+      
+      let marcas = [];
+      let erroresMarca = false;
+      
+      marcasItems.forEach(item => {
+        const marcaNombre = item.querySelector('.m').value.trim() || 'Genérica';
+        const cant = parseFloat(item.querySelector('.pc').value);
+        const unidad = item.querySelector('.pu').value;
+        const moneda = item.querySelector('.moneda').value; // OBTENER MONEDA
+        const precioIngresado = parseFloat(item.querySelector('.p').value);
+        
+        if (isNaN(cant) || isNaN(precioIngresado) || cant <= 0 || (precioIngresado < 0)) { 
+          erroresMarca = true;
+        } else {
+          
+          // *** CONVERSIÓN A USD PARA ALMACENAMIENTO INTERNO ***
+          let precioUSD = precioIngresado;
+          if (moneda === 'ves') {
+              if (tasaCambioBCV <= 0) {
+                  mostrarNotificacion('ERROR: La tasa de cambio debe ser > 0 para guardar en Bolívares.', 'error');
+                  erroresMarca = true;
+                  return;
+              }
+              precioUSD = vesToUsd(precioIngresado);
+          }
+          // **************************************************
+
+          marcas.push({
+            nombre: marcaNombre,
+            presentacionCantidad: cant,
+            presentacionUnidad: unidad,
+            precio: precioUSD, // Guardado en USD
+            monedaOriginal: moneda // Guardar la moneda en la que se ingresó
+          });
+        }
+      });
+      
+      if (erroresMarca) {
+        mostrarNotificacion('Revisa las cantidades, precios y la tasa de cambio.', 'error');
+        return;
+      }
+
+      if (marcas.length === 0) {
+          mostrarNotificacion('Debes añadir al menos una marca/presentación.', 'error');
+          return;
+      }
+      
+      let id = ingredienteIdAEditar;
+      if (!id) {
+          id = nom.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_');
+          if (datos.ingredientes[id]) {
+              mostrarNotificacion('Este ingrediente ya existe. Usa la función de edición si quieres modificarlo.', 'warning');
+              return;
+          }
+      }
+      
+      datos.ingredientes[id] = { nombre: nom, marcas: marcas };
+
+      if (ingredienteIdAEditar) {
+          mostrarNotificacion('✅ Ingrediente actualizado', 'success');
+          cancelarEdicionIngrediente(); 
+      } else {
+          mostrarNotificacion('✅ Ingrediente añadido', 'success');
+      }
+
+      marcarModificacion();
+      actualizarVistas(); // Actualizará la tabla y stats
+      
+      // Limpiar Formulario
+      document.getElementById('ingNombre').value = '';
+      document.getElementById('marcasContainer').innerHTML = '';
+      addMarca();
+    }
+
+    function eliminarIngrediente(id) {
+        const ing = datos.ingredientes[id];
+        if (!confirm(`¿Eliminar el ingrediente "${ing.nombre}" y todas sus referencias en recetas?`)) return;
+
+        delete datos.ingredientes[id];
+
+        datos.recetas.forEach(receta => {
+            receta.ingredientes = receta.ingredientes.filter(item => item.id !== id);
+        });
+
+        marcarModificacion();
+        actualizarVistas();
+        mostrarNotificacion('✅ Ingrediente y sus referencias eliminados', 'success');
+    }
+
+    // MODIFICADO: Permite la entrada con $ o Bs. en el texto.
+    function procesarTextoIngredientes() {
+        const texto = document.getElementById('textoIngredientes').value.trim();
+        const lineas = texto.split('\n').filter(line => line.trim() !== '');
+        const erroresDiv = document.getElementById('erroresIngParseo');
+        erroresDiv.innerHTML = '';
+        let ingredientesProcesados = 0;
+        let errores = [];
+
+        lineas.forEach((linea, index) => {
+            const partes = linea.split(' - ').map(p => p.trim());
+            
+            if (partes.length < 4) {
+                errores.push(`Línea ${index + 1}: Formato inválido. Se esperan 4 partes (Nombre - Marca - Cantidad Unidad - $Precio / Bs. Precio).`);
+                return;
+            }
+
+            const [nombre, marca, cantidadUnidad, precioStr] = partes;
+
+            // 1. Parsear Cantidad y Unidad
+            const match = cantidadUnidad.match(/(\d*\.?\d+)\s*([a-zA-Záéíóúñ]+)/);
+            if (!match) {
+                errores.push(`Línea ${index + 1}: Formato de cantidad/unidad inválido.`);
+                return;
+            }
+            const cantidad = parseFloat(match[1]);
+            const unidad = match[2].toLowerCase();
+            
+            // 2. Parsear Moneda y Precio
+            const monedaMatch = precioStr.match(/(\$|Bs\.?)\s*(\d*\.?\d+)/i);
+            if (!monedaMatch) {
+                errores.push(`Línea ${index + 1}: Moneda o Precio inválidos. Use '$' o 'Bs.'.`);
+                return;
+            }
+            const moneda = monedaMatch[1].toLowerCase().includes('bs') ? 'ves' : 'usd';
+            const precioIngresado = parseFloat(monedaMatch[2]);
+            
+            if (isNaN(cantidad) || cantidad <= 0 || isNaN(precioIngresado) || precioIngresado < 0) {
+                errores.push(`Línea ${index + 1}: Cantidad o Precio inválidos.`);
+                return;
+            }
+
+            // 3. Conversión a USD
+            let precioUSD = precioIngresado;
+            if (moneda === 'ves') {
+                if (tasaCambioBCV <= 0) {
+                    errores.push(`Línea ${index + 1}: La tasa de cambio debe ser > 0 para ingresar precios en Bs.`);
+                    return;
+                }
+                precioUSD = vesToUsd(precioIngresado);
+            }
+
+            const id = nombre.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_');
+
+            if (!datos.ingredientes[id]) {
+                datos.ingredientes[id] = { nombre: nombre, marcas: [] };
+            }
+
+            // Evitar duplicar la misma marca si ya existe
+            const marcaExistente = datos.ingredientes[id].marcas.find(m => 
+                m.nombre === marca && 
+                m.presentacionCantidad === cantidad && 
+                m.presentacionUnidad === unidad
+            );
+            
+            if (!marcaExistente) {
+                datos.ingredientes[id].marcas.push({
+                    nombre: marca,
+                    presentacionCantidad: cantidad,
+                    presentacionUnidad: unidad,
+                    precio: precioUSD, // Guardado en USD
+                    monedaOriginal: moneda // Moneda en la que se ingresó
+                });
+                ingredientesProcesados++;
+            }
+        });
+
+        if (errores.length > 0) {
+            erroresDiv.innerHTML = `<div style="color:var(--danger); margin-top:15px; background:#fdd; padding:10px; border-radius:5px;">
+                <strong>Errores de Parseo:</strong><ul>${errores.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
+            mostrarNotificacion(`Se encontraron ${errores.length} errores al cargar ingredientes.`, 'error');
+        }
+        
+        if (ingredientesProcesados > 0) {
+            marcarModificacion();
+            actualizarVistas();
+            document.getElementById('textoIngredientes').value = '';
+            mostrarNotificacion(`✅ ${ingredientesProcesados} marcas de ingredientes añadidas/actualizadas.`, 'success');
+        } else if (errores.length === 0) {
+            mostrarNotificacion('No se encontraron ingredientes nuevos válidos para añadir.', 'warning');
+        }
+    }
+
+
+    // MODIFICADO: Muestra costos en USD y VES
+    function renderIngredientes() {
+      const cont = document.getElementById('tablaIngredientes');
+      if (Object.keys(datos.ingredientes).length === 0) {
+        cont.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px;"><i class="fas fa-carrot fa-3x" style="color: #e9ecef; margin-bottom: 20px;"></i><p>No hay ingredientes cargados.</p></div>';
+        return;
+      }
+      
+      let html = `<table> <thead> <tr> <th>Ingrediente</th> <th>Marcas</th> <th>Costo/Unidad (Avg)</th> <th>Acciones</th> </tr> </thead> <tbody>`;
+
+      for (const id in datos.ingredientes) {
+        const ing = datos.ingredientes[id];
+        let totalCostoUnitarioUSD = 0;
+        let count = 0;
+        let unidadReferencia = 'g/ml/unidad';
+
+        let marcasHtml = ing.marcas.map(m => {
+            const unidadBase = obtenerUnidadBase(m.presentacionUnidad);
+            const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad); // m.precio ya es USD
+
+            if (!isNaN(costoUnitarioUSD) && isFinite(costoUnitarioUSD)) {
+                totalCostoUnitarioUSD += costoUnitarioUSD;
+                count++;
+            }
+            if (unidadReferencia === 'g/ml/unidad' && count > 0) {
+                unidadReferencia = unidadBase;
+            }
+
+            return `
+                <div style="font-size:0.9rem; margin-bottom: 5px; border-left: 3px solid #f59e0b; padding-left: 5px;">
+                    <strong>${m.nombre}</strong>: ${m.presentacionCantidad} ${m.presentacionUnidad} (${formatBothCurrencies(m.precio)})
+                </div>
+            `;
+        }).join('');
+
+        const costoPromedioUSD = count > 0 ? totalCostoUnitarioUSD / count : 0;
+        if (count === 0 && ing.marcas.length > 0) unidadReferencia = obtenerUnidadBase(ing.marcas[0].presentacionUnidad);
+
+
+        html += `
+          <tr>
+            <td>${ing.nombre}</td>
+            <td>${marcasHtml}</td>
+            <td>${formatBothCurrencies(costoPromedioUSD)} / ${unidadReferencia}</td>
+            <td>
+              <button class="btn btn-warning btn-sm" onclick="cargarIngredienteParaEdicion('${id}')">
+                <i class="fas fa-edit"></i> Editar
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarIngrediente('${id}')">
+                <i class="fas fa-trash"></i> Eliminar
+              </button>
+            </td>
+          </tr>
+        `;
+      }
+      
+      html += `</tbody></table>`;
+      cont.innerHTML = html;
+    }
+
+    // ============================================================================
+    // FUNCIONES PARA RECETAS
+    // ============================================================================
+    
+    function actualizarSelects() {
+        const selects = document.querySelectorAll('.select-ingrediente');
+        const options = Object.keys(datos.ingredientes).map(id => {
+            return `<option value="${id}">${datos.ingredientes[id].nombre}</option>`;
+        }).join('');
+
+        selects.forEach(select => {
+            const selectedId = select.value;
+            select.innerHTML = '<option value="">-- Seleccionar Ingrediente --</option>' + options;
+            if (selectedId && datos.ingredientes[selectedId]) {
+                select.value = selectedId;
+            }
+        });
+    }
+
+    function crearIngRecetaInput(item = {}) {
+        const d = document.createElement('div');
+        d.className = 'ing-receta flex';
+        d.innerHTML = `
+            <select class="select-ingrediente" style="flex: 2;">${Object.keys(datos.ingredientes).map(id => `<option value="${id}" ${id === item.id ? 'selected' : ''}>${datos.ingredientes[id].nombre}</option>`).join('')}</select>
+            <input type="number" step="any" class="cant-receta" value="${item.cantidad || ''}" placeholder="Cantidad" style="flex: 1;">
+            <select class="unit-receta" style="flex: 1;">${selUnidades(item.unidad || 'g')}</select>
+            <button class="btn btn-danger btn-sm remove" onclick="this.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        setTimeout(actualizarSelects, 0); 
+        return d;
+    }
+
+    function addIngReceta(item) {
+        document.getElementById('recetaIngContainer').appendChild(crearIngRecetaInput(item));
+    }
+
+    function calcularCostoReceta(receta) {
+        let costoTotalUSD = 0;
+        let errores = [];
+
+        receta.ingredientes.forEach((item, index) => {
+            // costoUnitario estará en USD
+            const { costo: costoUnitarioUSD, unidad: unidadBase } = calcularCostoUnitario(item.id, item.unidad);
+
+            if (costoUnitarioUSD === Infinity) {
+                errores.push(`${datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido'} (No se pudo calcular el costo/unidad base).`);
+                return;
+            }
+
+            let cantidadBase = convertir(item.cantidad, item.unidad);
+            
+            if (obtenerUnidadBase(item.unidad) !== unidadBase) {
+                 errores.push(`${datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido'} (Error de tipo de unidad: ${item.unidad} no es compatible con la unidad base ${unidadBase}).`);
+                 return;
+            }
+
+            costoTotalUSD += cantidadBase * costoUnitarioUSD;
+        });
+
+        return { costoTotalUSD, errores };
+    }
+
+    function guardarReceta(modoEdicion = false) {
+        const nombre = document.getElementById('recetaNombre').value.trim();
+        const porciones = parseInt(document.getElementById('porciones').value);
+        const ingItems = document.querySelectorAll('#recetaIngContainer .ing-receta');
+
+        if (!nombre) { mostrarNotificacion('El nombre de la receta es obligatorio.', 'error'); return; }
+        if (isNaN(porciones) || porciones < 1) { mostrarNotificacion('El número de porciones debe ser 1 o más.', 'error'); return; }
+
+        const ingredientes = [];
+        let erroresIng = false;
+
+        ingItems.forEach(item => {
+            const id = item.querySelector('.select-ingrediente').value;
+            const cantidad = parseFloat(item.querySelector('.cant-receta').value);
+            const unidad = item.querySelector('.unit-receta').value;
+
+            if (!id || isNaN(cantidad) || cantidad <= 0) {
+                erroresIng = true;
+            } else {
+                ingredientes.push({ id, cantidad, unidad });
+            }
+        });
+
+        if (erroresIng) { mostrarNotificacion('Revisa los ingredientes. Todos deben estar seleccionados y tener una cantidad positiva.', 'error'); return; }
+        if (ingredientes.length === 0) { mostrarNotificacion('La receta debe tener al menos un ingrediente.', 'error'); return; }
+
+        const receta = {
+            nombre: nombre,
+            porciones: porciones,
+            ingredientes: ingredientes,
+            ultimaCalculada: null,
+            costo: 0, // Costo en USD
+            costoPorPorcion: 0, // Costo por porción en USD
+        };
+
+        const { costoTotalUSD, errores } = calcularCostoReceta(receta);
+        if (errores.length > 0) {
+            mostrarNotificacion(`Receta guardada, pero con errores de cálculo. Revise los ingredientes: ${errores.join(', ')}`, 'warning', 7000);
+        }
+
+        receta.costo = costoTotalUSD;
+        receta.costoPorPorcion = costoTotalUSD / porciones;
+        receta.ultimaCalculada = new Date().toISOString();
+
+        // Guardar o Actualizar
+        const indexExistente = datos.recetas.findIndex(r => r.nombre === nombre);
+        if (indexExistente !== -1) {
+            datos.recetas[indexExistente] = receta;
+            mostrarNotificacion('✅ Receta actualizada con éxito.', 'success');
+        } else {
+            datos.recetas.push(receta);
+            mostrarNotificacion('✅ Receta guardada con éxito.', 'success');
+        }
+
+        marcarModificacion();
+        actualizarVistas(); // Actualizará la tabla y stats
+        document.getElementById('recetaNombre').value = '';
+        document.getElementById('recetaIngContainer').innerHTML = '';
+        addIngReceta();
+    }
+
+
+    function calcularReceta() {
+        const nombre = document.getElementById('recetaNombre').value.trim() || 'Receta Temporal';
+        const porciones = parseInt(document.getElementById('porciones').value);
+        const ingItems = document.querySelectorAll('#recetaIngContainer .ing-receta');
+
+        if (isNaN(porciones) || porciones < 1 || ingItems.length === 0) {
+            mostrarNotificacion('Complete el nombre, porciones y agregue ingredientes para calcular.', 'warning');
+            return;
+        }
+
+        const ingredientes = [];
+        ingItems.forEach(item => {
+            const id = item.querySelector('.select-ingrediente').value;
+            const cantidad = parseFloat(item.querySelector('.cant-receta').value);
+            const unidad = item.querySelector('.unit-receta').value;
+            if (id && !isNaN(cantidad) && cantidad > 0) {
+                ingredientes.push({ id, cantidad, unidad });
+            }
+        });
+
+        const recetaTemporal = { nombre, porciones, ingredientes };
+        const { costoTotalUSD, errores } = calcularCostoReceta(recetaTemporal);
+
+        const resultadoDiv = document.getElementById('resultado');
+        const resultadoSection = document.getElementById('resultadoSection');
+        resultadoSection.style.display = 'block';
+
+        let html = `<h3>Costo de ${nombre}</h3>`;
+
+        if (errores.length > 0) {
+            html += `<p style="color:var(--danger);"><strong>Error en el Cálculo:</strong> No se pudo calcular el costo de los siguientes ingredientes: ${errores.join(', ')}</p>`;
+        }
+        
+        const costoPorcionUSD = costoTotalUSD / porciones;
+
+        html += `
+            <p><strong>Costo Total de la Receta:</strong> <span class="usd-cost">${formatBothCurrencies(costoTotalUSD)}</span></p>
+            <p><strong>Costo por Porción (${porciones} porciones):</strong> <span class="usd-cost">${formatBothCurrencies(costoPorcionUSD)}</span></p>
+        `;
+
+        resultadoDiv.innerHTML = html;
+        mostrarTab('calculos');
+        resultadoSection.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // MODIFICADO: Muestra costos en USD y VES
+    function renderRecetas() {
+        const cont = document.getElementById('tablaRecetas');
+        if (datos.recetas.length === 0) {
+            cont.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px;"><i class="fas fa-book fa-3x" style="color: #e9ecef; margin-bottom: 20px;"></i><p>No hay recetas guardadas.</p></div>';
+            return;
+        }
+
+        let html = `<table> <thead> <tr> <th>Receta</th> <th>Porciones</th> <th>Costo Total</th> <th>Costo/Porción</th> <th>Acciones</th> </tr> </thead> <tbody>`;
+
+        datos.recetas.forEach((receta, index) => {
+            // receta.costo y receta.costoPorPorcion están en USD
+            html += `
+                <tr>
+                    <td>${receta.nombre}</td>
+                    <td>${receta.porciones}</td>
+                    <td>${formatBothCurrencies(receta.costo)}</td>
+                    <td>${formatBothCurrencies(receta.costoPorPorcion)}</td>
+                    <td>
+                        <button class="btn btn-secondary btn-sm" onclick="cargarReceta(${index})">
+                            <i class="fas fa-eye"></i> Cargar
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="eliminarReceta(${index})">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table>`;
+        cont.innerHTML = html;
+    }
+
+    function eliminarReceta(index) {
+        if (!confirm(`¿Estás seguro de eliminar la receta "${datos.recetas[index].nombre}"?`)) return;
+        datos.recetas.splice(index, 1);
+        marcarModificacion();
+        actualizarVistas();
+        mostrarNotificacion('✅ Receta eliminada', 'success');
+    }
+
+    // Funciones de PARSEO DE TEXTO (simplificadas)
+    function procesarTextoReceta() {
+        mostrarNotificacion('Esta función requiere que todos los ingredientes estén previamente cargados.', 'info', 5000);
+    }
+
+    // ============================================================================
+    // FUNCIONES DE ESTADÍSTICAS Y GRÁFICO
+    // ============================================================================
+
+    // MODIFICADO: Muestra costos en USD y VES en el header
+    function actualizarEstadisticas() {
+        document.getElementById('count-ingredientes').textContent = Object.keys(datos.ingredientes).length;
+        document.getElementById('count-recetas').textContent = datos.recetas.length;
+
+        let totalCostoIngredientesUSD = 0;
+        let countIngredientesValidos = 0;
+
+        for (const id in datos.ingredientes) {
+            const ing = datos.ingredientes[id];
+            let totalCostoUnitarioUSD = 0;
+            let countMarcas = 0;
+            ing.marcas.forEach(m => {
+                // m.precio ya es USD
+                const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad);
+                if (isFinite(costoUnitarioUSD) && costoUnitarioUSD > 0) {
+                    totalCostoUnitarioUSD += costoUnitarioUSD;
+                    countMarcas++;
+                }
+            });
+            if (countMarcas > 0) {
+                totalCostoIngredientesUSD += totalCostoUnitarioUSD / countMarcas;
+                countIngredientesValidos++;
+            }
+        }
+        
+        const costoPromedioUSD = countIngredientesValidos > 0 ? totalCostoIngredientesUSD / countIngredientesValidos : 0;
+        
+        // Renderizar estadísticas del Header
+        document.getElementById('total-costo-usd').textContent = `$${costoPromedioUSD.toFixed(2)}`;
+        document.getElementById('total-costo-ves').textContent = `Bs. ${usdToVes(costoPromedioUSD).toFixed(2)}`;
+    }
+
+    function actualizarGrafico() {
+        const ctx = document.getElementById('costoChart').getContext('2d');
+        const labels = datos.recetas.map(r => r.nombre);
+        // Usamos el costo en USD para la gráfica
+        const costosUSD = datos.recetas.map(r => r.costoPorPorcion.toFixed(2)); 
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Costo por Porción ($ USD)',
+                    data: costosUSD,
+                    backgroundColor: 'rgba(67, 97, 238, 0.7)',
+                    borderColor: 'rgba(67, 97, 238, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Costo ($ USD)' } },
+                    x: { title: { display: true, text: 'Receta' } }
+                }
+            }
+        });
+    }
+
+    // ============================================================================
+    // FUNCIONES DE EXPORTACIÓN/IMPORTACIÓN
+    // ============================================================================
+
+    function guardarEnUSB() {
+        const datosJSON = JSON.stringify(datos, null, 2);
+        const blob = new Blob([datosJSON], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'chefportable_datos.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        mostrarNotificacion('✅ Datos exportados como chefportable_datos.json', 'success', 5000);
+    }
+
+    function cargarDesdeUSB() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (loadedData.ingredientes && loadedData.recetas) {
+                        if (confirm('Se detectaron datos válidos. ¿Desea reemplazar los datos actuales (ingredientes y recetas) con el archivo cargado?')) {
+                            datos = loadedData;
+                            marcarModificacion();
+                            initApp(); // Reinicializar para renderizar todo
+                            mostrarNotificacion('✅ Datos cargados y aplicación actualizada.', 'success');
+                        }
+                    } else {
+                        mostrarNotificacion('El archivo JSON no parece contener datos válidos de ChefPortable.', 'error');
+                    }
+                } catch (error) {
+                    mostrarNotificacion('Error al leer el archivo JSON.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    // MODIFICADO: Muestra costos en USD y VES en el TXT de exportación
+    function exportarRecetasTexto() {
+        if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para exportar.', 'warning'); return; }
+
+        let texto = `--- RECETAS EXPORTADAS CHEFPORTABLE ---\n`;
+        texto += `TASA DE CAMBIO: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}\n\n`;
+
+        datos.recetas.forEach(receta => {
+            texto += `RECETA: ${receta.nombre}\n`;
+            texto += `PORCIONES: ${receta.porciones}\n`;
+            texto += `COSTO TOTAL: ${formatBothCurrencies(receta.costo)}\n`;
+            texto += `COSTO POR PORCIÓN: ${formatBothCurrencies(receta.costoPorPorcion)}\n`;
+            texto += `INGREDIENTES:\n`;
+            receta.ingredientes.forEach(item => {
+                const nombreIng = datos.ingredientes[item.id]?.nombre || 'Desconocido';
+                texto += `  - ${item.cantidad} ${item.unidad} de ${nombreIng}\n`;
+            });
+            texto += '\n---\n\n';
+        });
+
+        const blob = new Blob([texto], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'recetas_chefportable.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        mostrarNotificacion('✅ Recetas exportadas a un archivo de texto.', 'success', 5000);
+    }
+
+    function exportarListaCompras() {
+        if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para calcular la lista de compras.', 'warning'); return; }
+        mostrarNotificacion('Esta función calcularía la lista total de ingredientes necesarios para producir todas las recetas.', 'info', 5000);
+    }
+
+    // ============================================================================
+    // INICIALIZACIÓN
+    // ============================================================================
+    
+    // Función para refrescar todos los componentes de la interfaz
+    function actualizarVistas() {
+        // 1. Mostrar la tasa de cambio actual
+        document.getElementById('inputTasaCambio').value = tasaCambioBCV.toFixed(2);
+        document.getElementById('displayTasaCambio').textContent = `Bs. ${tasaCambioBCV.toFixed(2)}`;
+        
+        // 2. Refrescar todas las tablas y estadísticas
+        renderIngredientes();
+        renderRecetas();
+        actualizarSelects();
+        actualizarEstadisticas();
+        if (document.querySelector('.tab-content.active').id === 'tab-calculos') {
+            actualizarGrafico();
+        }
+    }
+
+    function initApp() {
+      cargarDatosLocal();
+      validarYEstructurarDatos();
+      
+      // PWA Install Prompt
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.getElementById('installButton').style.display = 'flex';
+      });
+
+      document.getElementById('installButton').addEventListener('click', (e) => {
+        document.getElementById('installButton').style.display = 'none';
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            mostrarNotificacion('ChefPortable PRO instalado correctamente!', 'success');
+          }
+          deferredPrompt = null;
+          document.getElementById('installButton').style.display = 'none';
+        });
+      });
+      
+      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) { 
+          document.getElementById('installButton').style.display = 'none'; 
+      }
+
+      // SERVICE WORKER
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(registration => {
+            console.log('ServiceWorker registrado:', registration.scope);
+          }).catch(error => {
+            console.log('Error registrando ServiceWorker:', error);
+          });
+        });
+      }
+
+      // ONLINE/OFFLINE
+      window.addEventListener('online', () => { updateConnectionStatus(); mostrarNotificacion('Conectado a internet', 'success'); });
+      window.addEventListener('offline', () => { updateConnectionStatus(); mostrarNotificacion('Sin conexión a internet', 'warning'); });
+      updateConnectionStatus();
+      
+      addMarca(); // Campo inicial para Ingrediente
+      addIngReceta(); // Campo inicial para Receta
+      
+      actualizarVistas(); // Función que llama a renderizar todo
+      
+      setInterval(() => {
+        if (datos.config && datos.config.autoguardado) {
+          autoGuardar();
+        }
+      }, 300000); 
+      
+      console.log('✅ APLICACIÓN INICIADA CORRECTAMENTE');
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>
