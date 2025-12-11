@@ -1,10 +1,13 @@
 // sw.js
-// IMPORTANTE: Incrementar la versión para forzar la actualización de la caché.
-const CACHE_NAME = 'chefportable-v5'; 
+// ¡CAMBIAR EL NOMBRE DE LA CACHÉ PARA FORZAR LA ACTUALIZACIÓN!
+const CACHE_NAME = 'chefportable-v7'; 
+
 const urlsToCache = [
   './',
   './index.html',
-  './manifest.json', // Añadir el manifest a la caché
+  './manifest.json',        // ¡Añadir!
+  './icon-192x192.png',     // ¡Añadir!
+  './icon-512x512.png',     // ¡Añadir!
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/chart.js'
 ];
@@ -38,4 +41,4 @@ self.addEventListener('activate', event => {
       );
     })
   );
-});
+});;
