@@ -1,6 +1,6 @@
 // sw.js
 // ¡CAMBIAR EL NOMBRE DE LA CACHÉ PARA FORZAR LA ACTUALIZACIÓN!
-const CACHE_NAME = 'chefportable-v7'; 
+const CACHE_NAME = 'chefportable-v8'; // <-- CAMBIO REALIZADO
 
 const urlsToCache = [
   './',

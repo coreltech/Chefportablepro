@@ -471,6 +471,11 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         <h3>Ingredientes</h3>
         <div id="recetaIngContainer"></div>
         
+        <label>Pasos de Preparación <small>(Opcional)</small></label>
+        <textarea id="recetaPasos" rows="6" placeholder="1. Precalentar el horno a 180°C.
+2. Mezclar los ingredientes secos.
+3. Añadir los ingredientes líquidos y mezclar hasta obtener una masa homogénea.
+4. Hornear por 30 minutos..."></textarea>
         <div class="flex">
           <button class="btn btn-success" onclick="addIngReceta()">
             <i class="fas fa-plus"></i> Agregar Ingrediente
@@ -486,6 +491,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
       <section class="section">
         <h2><i class="fas fa-file-alt"></i> 2. Cargar Receta desde Texto</h2>
+        <p>Solo se cargarán ingredientes, los pasos deben añadirse manualmente.</p>
         <textarea id="textoReceta" rows="6" placeholder="500 gramos de harina
 3 huevos
 200 ml de leche
@@ -735,7 +741,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
     // ============================================================================
     // FUNCIONES DE LA APLICACIÓN PRINCIPAL Y UTILIDADES
-    // (RESTO DE FUNCIONES COMO mostrarTab, mostrarNotificacion, etc. SIN CAMBIOS MAYORES)
     // ============================================================================
     
     function mostrarTab(tabId) {
@@ -784,43 +789,57 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
     }
 
-    // UTILIDADES DE UNIDADES Y CONVERSIÓN (Mantienen la misma lógica)
-    function selUnidades(selected = 'unidad') {
-      const units = [
-        'kg', 'g', 'l', 'ml', 'taza', 'cucharada', 
-        'cucharadita', 'vaso', 'pizca', 'unidad', 
-        'docena', 'pieza'
-      ];
-      return units.map(u => 
-        `<option value="${u}" ${u === selected ? 'selected' : ''}>${u}</option>`
-      ).join('');
-    }
-
+    // ============================================================================
+    // UTILIDADES DE UNIDADES Y CONVERSIÓN
+    // ============================================================================
     const TIPO_UNIDAD = {
-      'kg': 'peso', 'g': 'peso', 
-      'l': 'volumen', 'ml': 'volumen', 
-      'taza': 'volumen', 'vaso': 'volumen',
-      'cucharada': 'volumen', 'cucharadita': 'volumen',
-      'unidad': 'cantidad', 'docena': 'cantidad', 'pieza': 'cantidad',
-      'pizca': 'cantidad'
+        'g': 'peso', 'kg': 'peso', 'oz': 'peso', 'lb': 'peso',
+        'ml': 'volumen', 'l': 'volumen', 'taza': 'volumen', 'cucharada': 'volumen', 'cucharadita': 'volumen', 'vaso': 'volumen',
+        'unidad': 'cantidad', 'unidades': 'cantidad', 'pizca': 'cantidad', 'docena': 'cantidad', 'puñado': 'cantidad', 'bolsa': 'cantidad', 'paquete': 'cantidad',
     };
 
+    function crearOpcionesUnidad(seleccionada = 'g', isPresentacion = false) {
+        let options = '';
+        let unidades = Object.keys(TIPO_UNIDAD).sort();
+        
+        // Asegurarse de que las unidades más comunes para presentación estén al principio
+        if (isPresentacion) {
+             unidades = ['g', 'kg', 'ml', 'l', 'unidad', 'docena'].concat(unidades.filter(u => !['g', 'kg', 'ml', 'l', 'unidad', 'docena'].includes(u)));
+        }
+
+        unidades.forEach(unidad => {
+            const selected = unidad.toLowerCase() === seleccionada.toLowerCase() ? 'selected' : '';
+            options += `<option value="${unidad}" ${selected}>${unidad}</option>`;
+        });
+        return options;
+    }
+
+    // Convierte a la unidad base (g para peso, ml para volumen, unidad para cantidad)
     function convertir(cantidad, unidad) {
-      if (unidad === 'kg') return cantidad * 1000; 
-      if (unidad === 'l') return cantidad * 1000; 
-      if (unidad === 'docena') return cantidad * 12; 
-      if (unidad === 'taza') return cantidad * 240; 
-      if (unidad === 'cucharada') return cantidad * 15; 
-      if (unidad === 'cucharadita') return cantidad * 5; 
-      if (unidad === 'vaso') return cantidad * 200; 
-      return cantidad; 
+        unidad = unidad.toLowerCase();
+        
+        if (unidad === 'kg') return cantidad * 1000;
+        if (unidad === 'l') return cantidad * 1000;
+        
+        // Conversiones aproximadas de volumen a ml
+        if (unidad === 'taza') return cantidad * 240; 
+        if (unidad === 'cucharada') return cantidad * 15;
+        if (unidad === 'cucharadita') return cantidad * 5;
+        if (unidad === 'vaso') return cantidad * 200;
+        
+        // De docena a unidad
+        if (unidad === 'docena') return cantidad * 12;
+
+        // Peso a gramos
+        if (unidad === 'lb') return cantidad * 453.592;
+        if (unidad === 'oz') return cantidad * 28.3495;
+
+        // Si es unidad base (g, ml, unidad) o no convertible, devuelve la cantidad original
+        return cantidad; 
     }
 
     function obtenerUnidadBase(unidad) {
-        const tipo = TIPO_UNIDAD[unidad] || 'cantidad';
-        if (tipo === 'peso') return 'g';
-        if (tipo === 'volumen') return 'ml';
-        return 'unidad';
+        return TIPO_UNIDAD[unidad.toLowerCase()] || 'cantidad';
     }
 
     function calcularCostoUnitario(ingredienteId, unidadDeseada) {
@@ -829,117 +848,130 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
         let totalCostoUnitario = 0;
         let count = 0;
-        
+        const tipoDeseado = obtenerUnidadBase(unidadDeseada);
+
         ing.marcas.forEach(m => {
-            const unidadBaseMarca = obtenerUnidadBase(m.presentacionUnidad);
-            if (unidadBaseMarca === obtenerUnidadBase(unidadDeseada)) {
+            const tipoMarca = obtenerUnidadBase(m.presentacionUnidad);
+            
+            // Solo compara marcas si son del mismo tipo (peso vs volumen vs cantidad)
+            if (tipoMarca === tipoDeseado) {
                 const cantidadBase = convertir(m.presentacionCantidad, m.presentacionUnidad);
                 const costoUnitario = m.precio / cantidadBase; // Costo por unidad base en USD
+                
                 if (!isNaN(costoUnitario) && isFinite(costoUnitario)) {
                     totalCostoUnitario += costoUnitario;
                     count++;
                 }
             }
         });
-        
-        const costoPromedioUSD = count > 0 ? totalCostoUnitario / count : Infinity;
-        const unidadReferencia = obtenerUnidadBase(unidadDeseada);
 
-        if (TIPO_UNIDAD[unidadDeseada] === 'cantidad') {
-            let totalCostoCant = 0;
-            let countCant = 0;
-            ing.marcas.filter(m => TIPO_UNIDAD[m.presentacionUnidad] === 'cantidad').forEach(m => {
-                const costoCant = m.precio / m.presentacionCantidad; // Costo por unidad en USD
-                if (!isNaN(costoCant) && isFinite(costoCant)) {
-                    totalCostoCant += costoCant;
-                    countCant++;
-                }
-            });
-            return { costo: countCant > 0 ? totalCostoCant / countCant : Infinity, unidad: unidadDeseada };
-        }
+        const costoPromedioUSD = count > 0 ? totalCostoUnitario / count : Infinity;
+        let unidadReferencia;
         
+        if (tipoDeseado === 'peso') unidadReferencia = 'g';
+        else if (tipoDeseado === 'volumen') unidadReferencia = 'ml';
+        else unidadReferencia = 'unidad';
+        
+        // Ajuste: si la unidad deseada era 'unidad' o algo no convertible,
+        // devolvemos el costo promedio de las unidades de presentación
+        if (tipoDeseado === 'cantidad') {
+            return { costo: costoPromedioUSD, unidad: unidadReferencia };
+        }
+
         return { costo: costoPromedioUSD, unidad: unidadReferencia };
     }
 
 
-    // Funciones de Ingredientes, Recetas, Cálculos (sin cambios en la lógica interna)
+    // ============================================================================
+    // FUNCIONES DE INGREDIENTES (MODIFICADAS)
+    // ============================================================================
+
     function crearMarcaInput(marca = {}) {
-      const d = document.createElement('div');
-      d.className = 'marca-item';
+        const d = document.createElement('div');
+        d.className = 'marca-item';
+        
+        const presentacionCantidad = marca.presentacionCantidad || '';
+        const presentacionUnidad = marca.presentacionUnidad || 'g';
+        const presentacionDescripcion = marca.presentacionDescripcion || ''; 
+        
+        let precio = marca.precio || '';
+        let monedaSeleccionada = 'usd';
+        
+        if (marca.precio && marca.moneda === 'usd') {
+            // Convertir de USD a la moneda local para mostrar el precio original si la tasa es > 0
+            if (tasaCambioBCV > 0) {
+                precio = usdToVes(marca.precio);
+                monedaSeleccionada = 'ves';
+            } else {
+                precio = marca.precio;
+                monedaSeleccionada = 'usd';
+            }
+        }
+        
+        const precioMostrar = parseFloat(precio).toFixed(2);
 
-      let precioMostrar = '';
-      let monedaSeleccionada = 'usd';
-
-      if (marca.precio) {
-          monedaSeleccionada = marca.monedaOriginal || 'usd';
-          
-          if (monedaSeleccionada === 'ves') {
-              precioMostrar = usdToVes(marca.precio).toFixed(2);
-          } else {
-              precioMostrar = marca.precio.toFixed(2);
-          }
-      }
-
-      d.innerHTML = `
-        <button class="remove" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-        <label>Marca/Presentación</label>
-        <input class="m" value="${marca.nombre || ''}" placeholder="Ej: Bolsa de 1kg, Hacendado, Caja de 12">
-        <div class="grid" style="grid-template-columns: 1fr 1fr;">
-          <div>
-            <label>Cantidad</label>
-            <input type="number" step="any" class="pc" value="${marca.presentacionCantidad || ''}" placeholder="1">
-          </div>
-          <div>
-            <label>Unidad</label>
-            <select class="pu">${selUnidades(marca.presentacionUnidad || 'unidad')}</select>
-          </div>
-        </div>
-        <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 15px;">
-            <div>
-                <label>Moneda</label>
-                <select class="moneda">
-                    <option value="usd" ${monedaSeleccionada === 'usd' ? 'selected' : ''}>$ USD</option>
-                    <option value="ves" ${monedaSeleccionada === 'ves' ? 'selected' : ''}>Bs. VES</option>
-                </select>
+        d.innerHTML = `
+            <h4>Marca: <input type="text" class="m" value="${marca.nombre || 'Genérica'}" placeholder="Marca" style="display:inline-block; width:auto; margin:0 0 10px 5px;"></h4>
+            <button class="remove btn btn-danger btn-sm" onclick="this.closest('.marca-item').remove()">X</button>
+            
+            <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                <div>
+                    <label>Cantidad <small>(Presentación)</small></label>
+                    <input type="number" step="0.01" class="pc" value="${presentacionCantidad}" placeholder="1000">
+                </div>
+                <div>
+                    <label>Unidad <small>(Presentación)</small></label>
+                    <select class="pu">
+                        ${crearOpcionesUnidad(presentacionUnidad, true)} 
+                    </select>
+                </div>
+                <div>
+                    <label>Descripción Comercial <small>(Opcional)</small></label>
+                    <input type="text" class="pd" value="${presentacionDescripcion}" placeholder="Ej: Bolsa de nylon, Cartón de huevos"> 
+                </div>
             </div>
-            <div>
-                <label>Precio</label>
-                <input type="number" step="0.01" class="p" value="${precioMostrar}" placeholder="1.20">
+
+            <div class="flex" style="justify-content: flex-end; margin-top: 15px; gap: 10px;">
+                <div>
+                    <label>Moneda</label>
+                    <select class="moneda" style="width: auto; margin: 0;">
+                        <option value="usd" ${monedaSeleccionada === 'usd' ? 'selected' : ''}>$ USD</option>
+                        <option value="ves" ${monedaSeleccionada === 'ves' ? 'selected' : ''}>Bs. VES</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Precio</label>
+                    <input type="number" step="0.01" class="p" value="${precioMostrar}" placeholder="1.20" style="width: 100px; margin: 0;">
+                </div>
             </div>
-        </div>
-      `;
-      return d;
+        `;
+        return d;
     }
 
     function addMarca(marca) {
-      const container = document.getElementById('marcasContainer');
-      container.appendChild(crearMarcaInput(marca));
+        const container = document.getElementById('marcasContainer');
+        container.appendChild(crearMarcaInput(marca));
     }
-    
+
     function cargarIngredienteParaEdicion(id) {
         const ing = datos.ingredientes[id];
         if (!ing) {
             mostrarNotificacion('Ingrediente no encontrado.', 'error');
             return;
         }
-
         ingredienteIdAEditar = id;
         document.getElementById('guardarIngredienteBtn').innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
         document.getElementById('cancelarEdicionBtn').style.display = 'inline-flex';
         document.getElementById('ingredienteIdAEditar').value = id;
-
         document.getElementById('ingNombre').value = ing.nombre;
-        
         const marcasContainer = document.getElementById('marcasContainer');
-        marcasContainer.innerHTML = ''; 
+        marcasContainer.innerHTML = '';
         ing.marcas.forEach(marca => {
             addMarca(marca);
         });
-
         if (ing.marcas.length === 0) {
             addMarca();
         }
-
         mostrarTab('ingredientes');
         document.getElementById('formIngredienteSection').scrollIntoView({ behavior: 'smooth' });
         mostrarNotificacion(`Editando: ${ing.nombre}`, 'info');
@@ -952,100 +984,85 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         document.getElementById('marcasContainer').innerHTML = '';
         document.getElementById('guardarIngredienteBtn').innerHTML = '<i class="fas fa-save"></i> Añadir ingrediente';
         document.getElementById('cancelarEdicionBtn').style.display = 'none';
-        addMarca(); 
+        addMarca();
         mostrarNotificacion('Edición cancelada.', 'info');
     }
 
     function guardarIngrediente() {
-      const nom = document.getElementById('ingNombre').value.trim();
-      const marcasItems = document.querySelectorAll('.marca-item');
-      
-      if (nom === '') {
-        mostrarNotificacion('El nombre del ingrediente es obligatorio.', 'error');
-        return;
-      }
-      
-      let marcas = [];
-      let erroresMarca = false;
-      
-      marcasItems.forEach(item => {
-        const marcaNombre = item.querySelector('.m').value.trim() || 'Genérica';
-        const cant = parseFloat(item.querySelector('.pc').value);
-        const unidad = item.querySelector('.pu').value;
-        const moneda = item.querySelector('.moneda').value; 
-        const precioIngresado = parseFloat(item.querySelector('.p').value);
-        
-        if (isNaN(cant) || isNaN(precioIngresado) || cant <= 0 || (precioIngresado < 0)) { 
-          erroresMarca = true;
-          return;
-        } 
-        
-        let precioUSD = precioIngresado;
-        if (moneda === 'ves') {
-            if (tasaCambioBCV <= 0) {
-                mostrarNotificacion('ERROR: La tasa de cambio debe ser > 0 para guardar en Bolívares.', 'error');
-                erroresMarca = true;
-                return;
-            }
-            precioUSD = vesToUsd(precioIngresado);
+        const nom = document.getElementById('ingNombre').value.trim();
+        const marcasItems = document.querySelectorAll('.marca-item');
+
+        if (nom === '') {
+            mostrarNotificacion('El nombre del ingrediente es obligatorio.', 'error');
+            return;
         }
 
-        marcas.push({
-            nombre: marcaNombre,
-            presentacionCantidad: cant,
-            presentacionUnidad: unidad,
-            precio: precioUSD, // Guardado en USD
-            monedaOriginal: moneda // Guardar la moneda en la que se ingresó
+        let marcas = [];
+        let erroresMarca = false;
+        
+        marcasItems.forEach(item => {
+            const marcaNombre = item.querySelector('.m').value.trim() || 'Genérica';
+            const cant = parseFloat(item.querySelector('.pc').value);
+            const unidad = item.querySelector('.pu').value;
+            const desc = item.querySelector('.pd').value.trim(); 
+            const moneda = item.querySelector('.moneda').value;
+            const precioIngresado = parseFloat(item.querySelector('.p').value);
+
+            if (isNaN(cant) || cant <= 0 || isNaN(precioIngresado) || precioIngresado < 0) {
+                // Permitimos guardar el ingrediente sin marca si la validación falla (para el modo "fantasma")
+                // Pero si hay datos, deben ser válidos. Si solo hay nombre, continuamos.
+                if (cant > 0 || precioIngresado >= 0) {
+                     erroresMarca = true; // Solo marcamos error si ingresó datos inválidos
+                }
+                return; 
+            }
+
+            let precioUSD = precioIngresado;
+            if (moneda === 'ves') {
+                if (tasaCambioBCV <= 0) {
+                    mostrarNotificacion('¡Error! Fije una Tasa de Cambio primero para ingresar precios en Bs.', 'error');
+                    erroresMarca = true;
+                    return;
+                }
+                precioUSD = vesToUsd(precioIngresado);
+            }
+
+            marcas.push({
+                nombre: marcaNombre,
+                presentacionCantidad: cant,
+                presentacionUnidad: unidad,
+                presentacionDescripcion: desc, 
+                precio: precioUSD, // Stored internally as USD
+                moneda: 'usd' // Stored internally as USD
+            });
         });
         
-      });
-      
-      if (erroresMarca) {
-        mostrarNotificacion('Revisa las cantidades, precios y la tasa de cambio.', 'error');
-        return;
-      }
+        if (erroresMarca) {
+             mostrarNotificacion('Revisa las marcas. Las cantidades y precios deben ser números positivos. Tasa BCV fijada.', 'error');
+             return;
+        }
 
-      if (marcas.length === 0) {
-          mostrarNotificacion('Debes añadir al menos una marca/presentación.', 'error');
-          return;
-      }
-      
-      let id = ingredienteIdAEditar;
-      if (!id) {
-          id = nom.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_');
-          if (datos.ingredientes[id]) {
-              mostrarNotificacion('Este ingrediente ya existe. Usa la función de edición si quieres modificarlo.', 'warning');
-              return;
-          }
-      }
-      
-      datos.ingredientes[id] = { nombre: nom, marcas: marcas };
+        const nuevoIngrediente = {
+            id: ingredienteIdAEditar || new Date().getTime().toString() + Math.random().toString(36).substring(2, 9),
+            nombre: nom.charAt(0).toUpperCase() + nom.slice(1), // Capitalizar
+            marcas: marcas,
+        };
 
-      if (ingredienteIdAEditar) {
-          mostrarNotificacion('✅ Ingrediente actualizado', 'success');
-          cancelarEdicionIngrediente(); 
-      } else {
-          mostrarNotificacion('✅ Ingrediente añadido', 'success');
-      }
-
-      marcarModificacion();
-      actualizarVistas(); 
-      
-      document.getElementById('ingNombre').value = '';
-      document.getElementById('marcasContainer').innerHTML = '';
-      addMarca();
+        datos.ingredientes[nuevoIngrediente.id] = nuevoIngrediente;
+        
+        marcarModificacion();
+        cancelarEdicionIngrediente(); // Limpia el formulario y resetea el modo edición
+        actualizarVistas();
+        mostrarNotificacion(`✅ Ingrediente "${nom}" ${ingredienteIdAEditar ? 'actualizado' : 'añadido'} con éxito.`, 'success');
     }
 
     function eliminarIngrediente(id) {
         const ing = datos.ingredientes[id];
         if (!confirm(`¿Eliminar el ingrediente "${ing.nombre}" y todas sus referencias en recetas?`)) return;
-
         delete datos.ingredientes[id];
-
         datos.recetas.forEach(receta => {
             receta.ingredientes = receta.ingredientes.filter(item => item.id !== id);
         });
-
         marcarModificacion();
         actualizarVistas();
         mostrarNotificacion('✅ Ingrediente y sus referencias eliminados', 'success');
@@ -1058,17 +1075,13 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         erroresDiv.innerHTML = '';
         let ingredientesProcesados = 0;
         let errores = [];
-
         lineas.forEach((linea, index) => {
             const partes = linea.split(' - ').map(p => p.trim());
-            
             if (partes.length < 4) {
                 errores.push(`Línea ${index + 1}: Formato inválido. Se esperan 4 partes (Nombre - Marca - Cantidad Unidad - $Precio / Bs. Precio).`);
                 return;
             }
-
             const [nombre, marca, cantidadUnidad, precioStr] = partes;
-
             const match = cantidadUnidad.match(/(\d*\.?\d+)\s*([a-zA-Záéíóúñ]+)/);
             if (!match) {
                 errores.push(`Línea ${index + 1}: Formato de cantidad/unidad inválido.`);
@@ -1076,7 +1089,6 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             }
             const cantidad = parseFloat(match[1]);
             const unidad = match[2].toLowerCase();
-            
             const monedaMatch = precioStr.match(/(\$|Bs\.?)\s*(\d*\.?\d+)/i);
             if (!monedaMatch) {
                 errores.push(`Línea ${index + 1}: Moneda o Precio inválidos. Use '$' o 'Bs.'.`);
@@ -1084,12 +1096,10 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             }
             const moneda = monedaMatch[1].toLowerCase().includes('bs') ? 'ves' : 'usd';
             const precioIngresado = parseFloat(monedaMatch[2]);
-            
             if (isNaN(cantidad) || cantidad <= 0 || isNaN(precioIngresado) || precioIngresado < 0) {
                 errores.push(`Línea ${index + 1}: Cantidad o Precio inválidos.`);
                 return;
             }
-
             let precioUSD = precioIngresado;
             if (moneda === 'ves') {
                 if (tasaCambioBCV <= 0) {
@@ -1098,158 +1108,218 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                 }
                 precioUSD = vesToUsd(precioIngresado);
             }
-
-            const id = nombre.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '_');
-
-            if (!datos.ingredientes[id]) {
-                datos.ingredientes[id] = { nombre: nombre, marcas: [] };
-            }
-
-            const marcaExistente = datos.ingredientes[id].marcas.find(m => 
-                m.nombre === marca && 
-                m.presentacionCantidad === cantidad && 
-                m.presentacionUnidad === unidad
-            );
+            const id = nombre.toLowerCase().replace(/[^a-z0-9áéíóúñ\s]/g, '').replace(/\s+/g, '-');
             
-            if (!marcaExistente) {
-                datos.ingredientes[id].marcas.push({
+            // Buscar ingrediente existente por nombre (case-insensitive)
+            const existingId = Object.keys(datos.ingredientes).find(key => datos.ingredientes[key].nombre.toLowerCase() === nombre.toLowerCase());
+            
+            const finalId = existingId || new Date().getTime().toString() + Math.random().toString(36).substring(2, 9);
+            const ing = datos.ingredientes[finalId] || { id: finalId, nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1), marcas: [] };
+
+            // Asegurarse de que no haya duplicados de marca simple
+            const marcaExistente = ing.marcas.find(m => m.nombre.toLowerCase() === marca.toLowerCase());
+            
+            if (marcaExistente) {
+                // Si la marca existe, la actualiza
+                marcaExistente.presentacionCantidad = cantidad;
+                marcaExistente.presentacionUnidad = unidad;
+                marcaExistente.precio = precioUSD;
+            } else {
+                // Si la marca es nueva, la añade
+                ing.marcas.push({
                     nombre: marca,
                     presentacionCantidad: cantidad,
                     presentacionUnidad: unidad,
-                    precio: precioUSD, // Guardado en USD
-                    monedaOriginal: moneda // Moneda en la que se ingresó
+                    presentacionDescripcion: '', // Por ahora vacío en importación simple
+                    precio: precioUSD,
+                    moneda: 'usd'
                 });
-                ingredientesProcesados++;
             }
+
+            datos.ingredientes[finalId] = ing;
+            ingredientesProcesados++;
         });
 
         if (errores.length > 0) {
-            erroresDiv.innerHTML = `<div style="color:var(--danger); margin-top:15px; background:#fdd; padding:10px; border-radius:5px;">
-                <strong>Errores de Parseo:</strong><ul>${errores.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
-            mostrarNotificacion(`Se encontraron ${errores.length} errores al cargar ingredientes.`, 'error');
+            erroresDiv.innerHTML = '<p style="color:var(--danger);"><strong>Errores de Parseo:</strong></p>' + errores.map(e => `<p>- ${e}</p>`).join('');
         }
-        
+
         if (ingredientesProcesados > 0) {
             marcarModificacion();
             actualizarVistas();
-            document.getElementById('textoIngredientes').value = '';
-            mostrarNotificacion(`✅ ${ingredientesProcesados} marcas de ingredientes añadidas/actualizadas.`, 'success');
+            mostrarNotificacion(`✅ Se procesaron ${ingredientesProcesados} ingredientes.`, 'success');
         } else if (errores.length === 0) {
-            mostrarNotificacion('No se encontraron ingredientes nuevos válidos para añadir.', 'warning');
+            mostrarNotificacion('No se encontraron líneas válidas para procesar.', 'warning');
         }
     }
 
-
     function renderIngredientes() {
-      const cont = document.getElementById('tablaIngredientes');
-      if (Object.keys(datos.ingredientes).length === 0) {
-        cont.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px;"><i class="fas fa-carrot fa-3x" style="color: #e9ecef; margin-bottom: 20px;"></i><p>No hay ingredientes cargados.</p></div>';
-        return;
-      }
-      
-      let html = `<table> <thead> <tr> <th>Ingrediente</th> <th>Marcas</th> <th>Costo/Unidad (Avg)</th> <th>Acciones</th> </tr> </thead> <tbody>`;
+        const cont = document.getElementById('tablaIngredientes');
+        if (Object.keys(datos.ingredientes).length === 0) {
+            cont.innerHTML = '<div style="text-align: center; padding: 40px; background: white; border-radius: 10px;"><i class="fas fa-carrot fa-3x" style="color: #e9ecef; margin-bottom: 20px;"></i><p>No hay ingredientes cargados.</p></div>';
+            return;
+        }
 
-      for (const id in datos.ingredientes) {
-        const ing = datos.ingredientes[id];
-        let totalCostoUnitarioUSD = 0;
-        let count = 0;
-        let unidadReferencia = 'g/ml/unidad';
+        let html = `<table>
+            <thead>
+                <tr>
+                    <th>Ingrediente</th>
+                    <th>Marcas</th>
+                    <th>Costo/Unidad (Avg)</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>`;
 
-        let marcasHtml = ing.marcas.map(m => {
-            const unidadBase = obtenerUnidadBase(m.presentacionUnidad);
-            const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad); 
+        for (const id in datos.ingredientes) {
+            const ing = datos.ingredientes[id];
+            let totalCostoUnitarioUSD = 0;
+            let count = 0;
+            let unidadReferencia = 'g/ml/unidad';
 
-            if (!isNaN(costoUnitarioUSD) && isFinite(costoUnitarioUSD)) {
-                totalCostoUnitarioUSD += costoUnitarioUSD;
-                count++;
+            let marcasHtml = ing.marcas.map(m => {
+                const unidadBase = obtenerUnidadBase(m.presentacionUnidad);
+                const cantidadBase = convertir(m.presentacionCantidad, m.presentacionUnidad);
+                let costoUnitarioUSD = Infinity;
+
+                if (cantidadBase > 0) {
+                    costoUnitarioUSD = m.precio / cantidadBase;
+                }
+                
+                if (!isNaN(costoUnitarioUSD) && isFinite(costoUnitarioUSD)) {
+                    totalCostoUnitarioUSD += costoUnitarioUSD;
+                    count++;
+                }
+
+                if (unidadReferencia === 'g/ml/unidad' && count > 0) {
+                    unidadReferencia = unidadBase;
+                }
+                
+                const descHtml = m.presentacionDescripcion ? `(${m.presentacionDescripcion})` : ''; 
+                
+                return `
+                    <div style="font-size:0.9rem; margin-bottom: 5px; border-left: 3px solid #f59e0b; padding-left: 5px;">
+                        <strong>${m.nombre}</strong> ${descHtml}: ${m.presentacionCantidad} ${m.presentacionUnidad} (${formatBothCurrencies(m.precio)})
+                    </div>
+                `;
+            }).join('');
+            
+            // Si el ingrediente no tiene marcas (es un fantasma), mostramos un mensaje
+            if (ing.marcas.length === 0) {
+                marcasHtml = '<p style="color: var(--danger); font-style: italic;">Sin precio registrado (Ingrediente Fantasma)</p>';
             }
-            if (unidadReferencia === 'g/ml/unidad' && count > 0) {
-                unidadReferencia = unidadBase;
-            }
 
-            return `
-                <div style="font-size:0.9rem; margin-bottom: 5px; border-left: 3px solid #f59e0b; padding-left: 5px;">
-                    <strong>${m.nombre}</strong>: ${m.presentacionCantidad} ${m.presentacionUnidad} (${formatBothCurrencies(m.precio)})
-                </div>
+            const costoPromedioUSD = count > 0 ? totalCostoUnitarioUSD / count : 0;
+            
+            html += `
+                <tr>
+                    <td>${ing.nombre}</td>
+                    <td>${marcasHtml}</td>
+                    <td>${formatBothCurrencies(costoPromedioUSD)} / ${unidadReferencia}</td>
+                    <td>
+                        <button class="btn btn-warning btn-sm" onclick="cargarIngredienteParaEdicion('${id}')">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="eliminarIngrediente('${id}')">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </td>
+                </tr>
             `;
-        }).join('');
+        }
 
-        const costoPromedioUSD = count > 0 ? totalCostoUnitarioUSD / count : 0;
-        if (count === 0 && ing.marcas.length > 0) unidadReferencia = obtenerUnidadBase(ing.marcas[0].presentacionUnidad);
-
-
-        html += `
-          <tr>
-            <td>${ing.nombre}</td>
-            <td>${marcasHtml}</td>
-            <td>${formatBothCurrencies(costoPromedioUSD)} / ${unidadReferencia}</td>
-            <td>
-              <button class="btn btn-warning btn-sm" onclick="cargarIngredienteParaEdicion('${id}')">
-                <i class="fas fa-edit"></i> Editar
-              </button>
-              <button class="btn btn-danger btn-sm" onclick="eliminarIngrediente('${id}')">
-                <i class="fas fa-trash"></i> Eliminar
-              </button>
-            </td>
-          </tr>
-        `;
-      }
-      
-      html += `</tbody></table>`;
-      cont.innerHTML = html;
+        html += `</tbody></table>`;
+        cont.innerHTML = html;
     }
-
 
     function actualizarSelects() {
         const selects = document.querySelectorAll('.select-ingrediente');
-        const options = Object.keys(datos.ingredientes).map(id => {
-            return `<option value="${id}">${datos.ingredientes[id].nombre}</option>`;
+        const optionsHtml = Object.keys(datos.ingredientes).map(id => {
+            const ing = datos.ingredientes[id];
+            return `<option value="${id}">${ing.nombre}</option>`;
         }).join('');
 
         selects.forEach(select => {
-            const selectedId = select.value;
-            select.innerHTML = '<option value="">-- Seleccionar Ingrediente --</option>' + options;
-            if (selectedId && datos.ingredientes[selectedId]) {
-                select.value = selectedId;
-            }
+            const selectedId = select.value; // Guardar la selección actual
+            select.innerHTML = '<option value="">Seleccione un ingrediente</option>' + optionsHtml;
+            select.value = selectedId; // Restaurar la selección
         });
     }
+    
+    // ============================================================================
+    // FUNCIONES DE RECETAS (MODIFICADAS/AÑADIDAS)
+    // ============================================================================
 
-    function crearIngRecetaInput(item = {}) {
+    function addIngReceta(item = {}) {
+        const container = document.getElementById('recetaIngContainer');
         const d = document.createElement('div');
-        d.className = 'ing-receta flex';
+        d.className = 'ing-receta';
+        
+        const cantidad = item.cantidad || '';
+        const unidad = item.unidad || 'g';
+        const id = item.id || '';
+
+        // Opciones de ingrediente
+        const optionsHtml = Object.keys(datos.ingredientes).map(ingId => {
+            const ing = datos.ingredientes[ingId];
+            const selected = ingId === id ? 'selected' : '';
+            return `<option value="${ingId}" ${selected}>${ing.nombre}</option>`;
+        }).join('');
+        
         d.innerHTML = `
-            <select class="select-ingrediente" style="flex: 2;">${Object.keys(datos.ingredientes).map(id => `<option value="${id}" ${id === item.id ? 'selected' : ''}>${datos.ingredientes[id].nombre}</option>`).join('')}</select>
-            <input type="number" step="any" class="cant-receta" value="${item.cantidad || ''}" placeholder="Cantidad" style="flex: 1;">
-            <select class="unit-receta" style="flex: 1;">${selUnidades(item.unidad || 'g')}</select>
-            <button class="btn btn-danger btn-sm remove" onclick="this.parentElement.remove()">
-                <i class="fas fa-times"></i>
-            </button>
+            <button class="remove btn btn-danger btn-sm" onclick="this.closest('.ing-receta').remove()">X</button>
+            <div class="grid" style="grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: flex-end;">
+                <div>
+                    <label>Ingrediente</label>
+                    <select class="select-ingrediente" onchange="actualizarSelects()">
+                        <option value="">Seleccione un ingrediente</option>
+                        ${optionsHtml}
+                    </select>
+                </div>
+                <div>
+                    <label>Cantidad (Receta)</label>
+                    <input type="number" step="0.01" class="cant-receta" value="${cantidad}" placeholder="Ej: 500">
+                </div>
+                <div>
+                    <label>Unidad (Receta)</label>
+                    <select class="unit-receta">
+                        ${crearOpcionesUnidad(unidad)}
+                    </select>
+                </div>
+            </div>
         `;
-        setTimeout(actualizarSelects, 0); 
-        return d;
+        container.appendChild(d);
+        
+        if (id) {
+             // Si se cargó un ingrediente automáticamente, intenta seleccionarlo
+             d.querySelector('.select-ingrediente').value = id;
+        }
     }
-
-    function addIngReceta(item) {
-        document.getElementById('recetaIngContainer').appendChild(crearIngRecetaInput(item));
+    
+    function removeIngReceta(button) {
+        button.closest('.ing-receta').remove();
     }
-
+    
     function calcularCostoReceta(receta) {
         let costoTotalUSD = 0;
         let errores = [];
-
-        receta.ingredientes.forEach((item, index) => {
-            const { costo: costoUnitarioUSD, unidad: unidadBase } = calcularCostoUnitario(item.id, item.unidad);
+        
+        receta.ingredientes.forEach(item => {
+            const { costo: costoUnitarioUSD, unidad: unidadReferencia } = calcularCostoUnitario(item.id, item.unidad);
 
             if (costoUnitarioUSD === Infinity) {
-                errores.push(`${datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido'} (No se pudo calcular el costo/unidad base).`);
+                const nombre = datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido';
+                errores.push(`${nombre} (Sin precio/marca registrado)`);
                 return;
             }
 
-            let cantidadBase = convertir(item.cantidad, item.unidad);
+            // Convertir la cantidad de la receta a la unidad base (g, ml, unidad)
+            const cantidadBase = convertir(item.cantidad, item.unidad);
             
-            if (obtenerUnidadBase(item.unidad) !== unidadBase) {
-                 errores.push(`${datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido'} (Error de tipo de unidad: ${item.unidad} no es compatible con la unidad base ${unidadBase}).`);
+            // Verificar si la conversión es compatible (ej: no convertir gramos a ml)
+            const tipoReceta = obtenerUnidadBase(item.unidad);
+            if (tipoReceta !== obtenerUnidadBase(unidadReferencia)) {
+                 errores.push(`${datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido'} (Error de tipo de unidad: ${item.unidad} no es compatible con la unidad base ${unidadReferencia}).`);
                  return;
             }
 
@@ -1263,18 +1333,23 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         const nombre = document.getElementById('recetaNombre').value.trim();
         const porciones = parseInt(document.getElementById('porciones').value);
         const ingItems = document.querySelectorAll('#recetaIngContainer .ing-receta');
+        const pasos = document.getElementById('recetaPasos').value.trim(); // NUEVO: Leer pasos
 
-        if (!nombre) { mostrarNotificacion('El nombre de la receta es obligatorio.', 'error'); return; }
-        if (isNaN(porciones) || porciones < 1) { mostrarNotificacion('El número de porciones debe ser 1 o más.', 'error'); return; }
+        if (!nombre) {
+            mostrarNotificacion('El nombre de la receta es obligatorio.', 'error');
+            return;
+        }
+        if (isNaN(porciones) || porciones < 1) {
+            mostrarNotificacion('El número de porciones debe ser 1 o más.', 'error');
+            return;
+        }
 
         const ingredientes = [];
         let erroresIng = false;
-
         ingItems.forEach(item => {
             const id = item.querySelector('.select-ingrediente').value;
             const cantidad = parseFloat(item.querySelector('.cant-receta').value);
             const unidad = item.querySelector('.unit-receta').value;
-
             if (!id || isNaN(cantidad) || cantidad <= 0) {
                 erroresIng = true;
             } else {
@@ -1282,19 +1357,27 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             }
         });
 
-        if (erroresIng) { mostrarNotificacion('Revisa los ingredientes. Todos deben estar seleccionados y tener una cantidad positiva.', 'error'); return; }
-        if (ingredientes.length === 0) { mostrarNotificacion('La receta debe tener al menos un ingrediente.', 'error'); return; }
+        if (erroresIng) {
+            mostrarNotificacion('Revisa los ingredientes. Todos deben estar seleccionados y tener una cantidad positiva.', 'error');
+            return;
+        }
+        if (ingredientes.length === 0) {
+            mostrarNotificacion('La receta debe tener al menos un ingrediente.', 'error');
+            return;
+        }
 
         const receta = {
             nombre: nombre,
             porciones: porciones,
             ingredientes: ingredientes,
+            pasos: pasos, // NUEVO: Guardar pasos
             ultimaCalculada: null,
-            costo: 0, 
-            costoPorPorcion: 0, 
+            costo: 0,
+            costoPorPorcion: 0,
         };
 
         const { costoTotalUSD, errores } = calcularCostoReceta(receta);
+        
         if (errores.length > 0) {
             mostrarNotificacion(`Receta guardada, pero con errores de cálculo. Revise los ingredientes: ${errores.join(', ')}`, 'warning', 7000);
         }
@@ -1313,20 +1396,24 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
 
         marcarModificacion();
-        actualizarVistas(); 
+        actualizarVistas();
+        
+        // Limpiar el formulario
         document.getElementById('recetaNombre').value = '';
+        document.getElementById('porciones').value = '4';
+        document.getElementById('recetaPasos').value = ''; // LIMPIAR NUEVO CAMPO
         document.getElementById('recetaIngContainer').innerHTML = '';
         addIngReceta();
     }
 
-
     function calcularReceta() {
-        const nombre = document.getElementById('recetaNombre').value.trim() || 'Receta Temporal';
+        // Simular el guardado para obtener los valores actuales del formulario
+        const nombre = document.getElementById('recetaNombre').value.trim();
         const porciones = parseInt(document.getElementById('porciones').value);
         const ingItems = document.querySelectorAll('#recetaIngContainer .ing-receta');
 
-        if (isNaN(porciones) || porciones < 1 || ingItems.length === 0) {
-            mostrarNotificacion('Complete el nombre, porciones y agregue ingredientes para calcular.', 'warning');
+        if (!nombre || isNaN(porciones) || porciones < 1 || ingItems.length === 0) {
+            mostrarNotificacion('Complete el nombre, porciones y agregue al menos un ingrediente.', 'warning');
             return;
         }
 
@@ -1339,16 +1426,21 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                 ingredientes.push({ id, cantidad, unidad });
             }
         });
-
-        const recetaTemporal = { nombre, porciones, ingredientes };
-        const { costoTotalUSD, errores } = calcularCostoReceta(recetaTemporal);
-
+        
+        if (ingredientes.length === 0) {
+            mostrarNotificacion('La receta debe tener al menos un ingrediente válido para calcular.', 'error');
+            return;
+        }
+        
+        const recetaSimulada = { nombre, porciones, ingredientes };
+        const { costoTotalUSD, errores } = calcularCostoReceta(recetaSimulada);
+        
         const resultadoDiv = document.getElementById('resultado');
         const resultadoSection = document.getElementById('resultadoSection');
         resultadoSection.style.display = 'block';
 
         let html = `<h3>Costo de ${nombre}</h3>`;
-
+        
         if (errores.length > 0) {
             html += `<p style="color:var(--danger);"><strong>Error en el Cálculo:</strong> No se pudo calcular el costo de los siguientes ingredientes: ${errores.join(', ')}</p>`;
         }
@@ -1365,6 +1457,116 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         resultadoSection.scrollIntoView({ behavior: 'smooth' });
     }
 
+    function mostrarPasos(index) {
+        const receta = datos.recetas[index];
+        if (!receta || !receta.pasos || receta.pasos.trim().length === 0) {
+            mostrarNotificacion('Esta receta no tiene pasos de preparación registrados.', 'warning');
+            return;
+        }
+
+        const pasosFormateados = receta.pasos.split('\n').map(p => p.trim()).filter(p => p.length > 0).join('\n');
+        
+        // Usar alert simple para mostrar los pasos
+        alert(`--- Pasos de Preparación: ${receta.nombre} ---\n\n${pasosFormateados}`);
+    }
+
+    function cargarReceta(index) {
+        const receta = datos.recetas[index];
+        if (!receta) return;
+
+        document.getElementById('recetaNombre').value = receta.nombre;
+        document.getElementById('porciones').value = receta.porciones;
+        document.getElementById('recetaPasos').value = receta.pasos || ''; // NUEVO: Cargar pasos
+        
+        const container = document.getElementById('recetaIngContainer');
+        container.innerHTML = ''; // Limpiar ingredientes
+        
+        receta.ingredientes.forEach(ing => addIngReceta(ing));
+        
+        mostrarTab('recetas');
+        document.getElementById('recetaNombre').scrollIntoView({ behavior: 'smooth' });
+        mostrarNotificacion(`Receta "${receta.nombre}" cargada para edición.`, 'info');
+    }
+
+    // NUEVA FUNCIÓN PARA PROCESAR RECETAS DESDE TEXTO (Permite crear ingredientes sin marcas)
+    function procesarTextoReceta() {
+        const texto = document.getElementById('textoReceta').value.trim();
+        const lineas = texto.split('\n').filter(line => line.trim() !== '');
+        const erroresDiv = document.getElementById('erroresParseo');
+        erroresDiv.innerHTML = '';
+        
+        // Configurar la receta en el formulario
+        document.getElementById('recetaNombre').value = 'Nueva Receta (Importada)';
+        document.getElementById('porciones').value = '1';
+        document.getElementById('recetaPasos').value = ''; // NUEVO: Limpiar pasos en importación
+        const container = document.getElementById('recetaIngContainer');
+        container.innerHTML = ''; // Limpiar ingredientes existentes
+        
+        let ingredientesNuevos = 0;
+        let errores = [];
+        
+        // Expresión para buscar: CANTIDAD UNIDAD [de/d'] INGREDIENTE
+        const regex = /(\d*\.?\d+)\s*([a-zA-Zñáéíóú]+)\s*(?:de\s*|d['\s]*)?(.+)/i;
+        
+        lineas.forEach((linea, index) => {
+            const match = linea.match(regex);
+            
+            if (!match) {
+                errores.push(`Línea ${index + 1}: Formato inválido. No se pudo extraer Cantidad, Unidad e Ingrediente. (Ej: 500 gramos de harina)`);
+                return;
+            }
+            
+            const cantidad = parseFloat(match[1]);
+            const unidadReceta = match[2].toLowerCase();
+            let nombreIngrediente = match[3].trim().toLowerCase();
+            
+            // Intento simple de normalización de plural (ej: 'huevos' a 'huevo')
+            if (nombreIngrediente.endsWith('s')) { 
+                nombreIngrediente = nombreIngrediente.substring(0, nombreIngrediente.length - 1);
+            }
+            
+            // Búsqueda de ingrediente existente (case-insensitive)
+            const ingId = Object.keys(datos.ingredientes).find(id => 
+                datos.ingredientes[id].nombre.toLowerCase() === nombreIngrediente
+            );
+            
+            let finalId;
+            
+            if (!ingId) {
+                // **INGREDIENTE FANTASMA CREADO**
+                finalId = new Date().getTime().toString() + Math.random().toString(36).substring(2, 9);
+                datos.ingredientes[finalId] = {
+                    id: finalId,
+                    nombre: nombreIngrediente.charAt(0).toUpperCase() + nombreIngrediente.slice(1), // Capitalizar
+                    marcas: [] // ¡Sin precio ni marca!
+                };
+                ingredientesNuevos++;
+            } else {
+                finalId = ingId;
+            }
+            
+            // Agregar el ingrediente a la receta en el formulario
+            addIngReceta({
+                id: finalId, 
+                cantidad: cantidad, 
+                unidad: unidadReceta 
+            });
+        });
+        
+        if (errores.length > 0) {
+            erroresDiv.innerHTML = '<p style="color:var(--danger);"><strong>Errores de Parseo:</strong></p>' + errores.map(e => `<p>- ${e}</p>`).join('');
+        }
+        
+        // Guardar los nuevos ingredientes fantasmas en la base de datos
+        marcarModificacion();
+        
+        mostrarNotificacion(`Receta procesada. Se agregaron ${lineas.length - errores.length} ingredientes. ${ingredientesNuevos > 0 ? `(${ingredientesNuevos} ingredientes nuevos creados sin costo)` : ''}`, 'success', 7000);
+        
+        // Cambiar a la pestaña de recetas y mostrar el formulario
+        mostrarTab('recetas');
+        document.getElementById('recetaNombre').scrollIntoView({ behavior: 'smooth' });
+    }
+
     function renderRecetas() {
         const cont = document.getElementById('tablaRecetas');
         if (datos.recetas.length === 0) {
@@ -1372,9 +1574,24 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             return;
         }
 
-        let html = `<table> <thead> <tr> <th>Receta</th> <th>Porciones</th> <th>Costo Total</th> <th>Costo/Porción</th> <th>Acciones</th> </tr> </thead> <tbody>`;
+        let html = `<table>
+            <thead>
+                <tr>
+                    <th>Receta</th>
+                    <th>Porciones</th>
+                    <th>Costo Total</th>
+                    <th>Costo/Porción</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>`;
 
         datos.recetas.forEach((receta, index) => {
+            const hasPasos = receta.pasos && receta.pasos.trim().length > 0;
+            const pasosBtn = hasPasos 
+                ? `<button class="btn btn-success btn-sm" onclick="mostrarPasos(${index})"><i class="fas fa-list-ol"></i> Pasos</button>`
+                : `<button class="btn btn-secondary btn-sm" disabled><i class="fas fa-list-ol"></i> Sin Pasos</button>`;
+
             html += `
                 <tr>
                     <td>${receta.nombre}</td>
@@ -1382,6 +1599,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                     <td>${formatBothCurrencies(receta.costo)}</td>
                     <td>${formatBothCurrencies(receta.costoPorPorcion)}</td>
                     <td>
+                        ${pasosBtn}
                         <button class="btn btn-secondary btn-sm" onclick="cargarReceta(${index})">
                             <i class="fas fa-eye"></i> Cargar
                         </button>
@@ -1392,7 +1610,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                 </tr>
             `;
         });
-        
+
         html += `</tbody></table>`;
         cont.innerHTML = html;
     }
@@ -1405,52 +1623,141 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         mostrarNotificacion('✅ Receta eliminada', 'success');
     }
     
-    // Función de exportación de la lista de compras (Placeholder)
+    // ============================================================================
+    // FUNCIONES DE EXPORTACIÓN/IMPORTACIÓN Y BACKUP
+    // ============================================================================
+
     function exportarListaCompras() {
-        if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para calcular la lista de compras.', 'warning'); return; }
-        mostrarNotificacion('Esta función calcularía la lista total de ingredientes necesarios para producir todas las recetas.', 'info', 5000);
-    }
+        if (datos.recetas.length === 0) {
+            mostrarNotificacion('No hay recetas para generar la lista de compras.', 'warning');
+            return;
+        }
 
-    // Funciones de PARSEO DE TEXTO (simplificadas)
-    function procesarTextoReceta() {
-        mostrarNotificacion('Esta función requiere que todos los ingredientes estén previamente cargados.', 'info', 5000);
-    }
-    
-    // Funciones de estadísticas y gráfico (Mantienen la misma lógica)
-    function actualizarEstadisticas() {
-        document.getElementById('count-ingredientes').textContent = Object.keys(datos.ingredientes).length;
-        document.getElementById('count-recetas').textContent = datos.recetas.length;
+        const shoppingList = {};
 
-        let totalCostoIngredientesUSD = 0;
-        let countIngredientesValidos = 0;
+        datos.recetas.forEach(receta => {
+            receta.ingredientes.forEach(item => {
+                const ing = datos.ingredientes[item.id];
+                if (ing) {
+                    const nombre = ing.nombre;
+                    const cantidadBase = convertir(item.cantidad, item.unidad);
+                    const unidadBase = obtenerUnidadBase(item.unidad) === 'peso' ? 'g' : (obtenerUnidadBase(item.unidad) === 'volumen' ? 'ml' : 'unidad');
 
-        for (const id in datos.ingredientes) {
-            const ing = datos.ingredientes[id];
-            let totalCostoUnitarioUSD = 0;
-            let countMarcas = 0;
-            ing.marcas.forEach(m => {
-                const costoUnitarioUSD = m.precio / convertir(m.presentacionCantidad, m.presentacionUnidad); 
-                if (isFinite(costoUnitarioUSD) && costoUnitarioUSD > 0) {
-                    totalCostoUnitarioUSD += costoUnitarioUSD;
-                    countMarcas++;
+                    if (!shoppingList[nombre]) {
+                        shoppingList[nombre] = { cantidad: 0, unidad: unidadBase, recetas: [] };
+                    }
+                    
+                    // Solo sumar si son del mismo tipo base (peso, volumen, cantidad)
+                    if (shoppingList[nombre].unidad === unidadBase) {
+                        shoppingList[nombre].cantidad += cantidadBase;
+                    } else {
+                        // Si hay mezcla de tipos (ej: gramos y unidades), usa 'verificar'
+                        shoppingList[nombre].unidad = 'verificar';
+                    }
+                    
+                    if (!shoppingList[nombre].recetas.includes(receta.nombre)) {
+                         shoppingList[nombre].recetas.push(receta.nombre);
+                    }
                 }
             });
-            if (countMarcas > 0) {
-                totalCostoIngredientesUSD += totalCostoUnitarioUSD / countMarcas;
-                countIngredientesValidos++;
+        });
+
+        let texto = `--- LISTA DE COMPRAS (GENERADA) ---\n\n`;
+        let listaHtml = `<h3>Lista de Compras Consolidada</h3><ul>`;
+
+        for (const nombre in shoppingList) {
+            const item = shoppingList[nombre];
+            let cantidadDisplay = item.cantidad.toFixed(2);
+            let unidadDisplay = item.unidad;
+
+            // Simple ajuste a unidades más grandes para mejor lectura
+            if (item.unidad === 'g' && item.cantidad >= 1000) {
+                cantidadDisplay = (item.cantidad / 1000).toFixed(2);
+                unidadDisplay = 'kg';
+            } else if (item.unidad === 'ml' && item.cantidad >= 1000) {
+                cantidadDisplay = (item.cantidad / 1000).toFixed(2);
+                unidadDisplay = 'l';
+            } else if (item.unidad === 'verificar') {
+                 cantidadDisplay = ''; // Ocultar cantidad para obligar a revisar
+                 unidadDisplay = 'UNIDADES/PESO MIXTO (¡REVISAR!)';
             }
+            
+            texto += `${nombre}: ${cantidadDisplay} ${unidadDisplay} (Usado en: ${item.recetas.join(', ')})\n`;
+            listaHtml += `<li><strong>${nombre}:</strong> ${cantidadDisplay} ${unidadDisplay} <small>(Usado en: ${item.recetas.join(', ')})</small></li>`;
         }
         
-        const costoPromedioUSD = countIngredientesValidos > 0 ? totalCostoIngredientesUSD / countIngredientesValidos : 0;
+        listaHtml += `</ul>`;
         
-        document.getElementById('total-costo-usd').textContent = `$${costoPromedioUSD.toFixed(2)}`;
-        document.getElementById('total-costo-ves').textContent = `Bs. ${usdToVes(costoPromedioUSD).toFixed(2)}`;
+        // Crear archivo de texto para descargar
+        const blob = new Blob([texto], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'chefportable_lista_compras.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        mostrarNotificacion('✅ Lista de compras generada y descargada.', 'success', 5000);
+    }
+    
+    function exportarRecetasTexto() {
+        if (datos.recetas.length === 0) {
+            mostrarNotificacion('No hay recetas para exportar.', 'warning');
+            return;
+        }
+
+        let texto = `--- RECETAS EXPORTADAS CHEFPORTABLE ---\n`;
+        texto += `TASA DE CAMBIO: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}\n\n`;
+
+        datos.recetas.forEach(receta => {
+            texto += `RECETA: ${receta.nombre}\n`;
+            texto += `PORCIONES: ${receta.porciones}\n`;
+            texto += `COSTO TOTAL: ${formatBothCurrencies(receta.costo)}\n`;
+            texto += `COSTO POR PORCIÓN: ${formatBothCurrencies(receta.costoPorPorcion)}\n`;
+            texto += `INGREDIENTES:\n`;
+            receta.ingredientes.forEach(item => {
+                const nombreIng = datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido';
+                texto += `  - ${item.cantidad} ${item.unidad} de ${nombreIng}\n`;
+            });
+
+            // NUEVO: Incluir pasos de preparación
+            if (receta.pasos && receta.pasos.trim().length > 0) {
+                 texto += `\nPASOS:\n${receta.pasos.trim()}\n`;
+            } else {
+                 texto += `\nPASOS: (No registrados)\n`;
+            }
+            // FIN NUEVO
+
+            texto += `\n`;
+        });
+
+        const blob = new Blob([texto], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'chefportable_recetas_export.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        mostrarNotificacion('✅ Recetas exportadas a texto.', 'success', 5000);
     }
 
     function actualizarGrafico() {
         const ctx = document.getElementById('costoChart').getContext('2d');
-        const labels = datos.recetas.map(r => r.nombre);
-        const costosUSD = datos.recetas.map(r => r.costoPorPorcion.toFixed(2)); 
+        if (datos.recetas.length === 0) {
+            if (chartInstance) chartInstance.destroy();
+            ctx.canvas.parentNode.innerHTML = '<p class="text-center" style="color:#6c757d;">No hay recetas guardadas para generar el gráfico.</p>';
+            return;
+        }
+
+        // Ordenar recetas por costo por porción (mayor a menor)
+        const recetasOrdenadas = [...datos.recetas].sort((a, b) => b.costoPorPorcion - a.costoPorPorcion);
+
+        const labels = recetasOrdenadas.map(r => r.nombre);
+        const costosUSD = recetasOrdenadas.map(r => r.costoPorPorcion.toFixed(2));
 
         if (chartInstance) {
             chartInstance.destroy();
@@ -1471,16 +1778,23 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             options: {
                 responsive: true,
                 scales: {
-                    y: { beginAtZero: true, title: { display: true, text: 'Costo ($ USD)' } },
-                    x: { title: { display: true, text: 'Receta' } }
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Costo ($ USD)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Receta'
+                        }
+                    }
                 }
             }
         });
     }
-
-    // ============================================================================
-    // FUNCIONES DE EXPORTACIÓN/IMPORTACIÓN Y BACKUP FORZADO (MODIFICADAS)
-    // ============================================================================
 
     // Guardado de Respaldo: Agrega lógica para el respaldo forzado
     function guardarEnUSB(esForzado = false) {
@@ -1494,12 +1808,11 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         if (esForzado) {
             // Actualiza el timestamp del último backup
             datos.config.ultimoBackup = new Date().toISOString();
             autoGuardar(); // Guardar el nuevo timestamp en IndexDB
-            
             mostrarNotificacion('✅ Respaldo de seguridad guardado. Guárdelo en un lugar seguro.', 'success', 7000);
             checkBackupStatus(); // Actualiza el botón de notificación
         } else {
@@ -1511,9 +1824,10 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     function checkBackupStatus() {
         const backupTimeEl = document.getElementById('lastBackupTime');
         const promptBtn = document.getElementById('backupPromptBtn');
-        
         const lastBackup = datos.config.ultimoBackup ? new Date(datos.config.ultimoBackup) : null;
         const now = new Date();
+        
+        promptBtn.classList.remove('btn-backup-urgent');
         
         if (!lastBackup) {
             backupTimeEl.textContent = 'Último respaldo manual: ¡NUNCA!';
@@ -1523,26 +1837,24 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
 
         const diffTime = Math.abs(now - lastBackup);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-        backupTimeEl.textContent = `Último respaldo manual: hace ${diffDays} días (${lastBackup.toLocaleDateString()})`;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        backupTimeEl.textContent = `Último respaldo manual: hace ${diffDays} día${diffDays === 1 ? '' : 's'}.`;
 
         if (diffDays >= diasParaBackup) {
-            promptBtn.textContent = `¡RESPALDO REQUERIDO! Han pasado ${diffDays} días`;
+            promptBtn.textContent = `¡ADVERTENCIA! Respaldo pendiente (${diffDays} días)`;
             promptBtn.classList.add('btn-backup-urgent');
-            // Muestra una notificación persistente
-            mostrarNotificacion(`ADVERTENCIA: Han pasado ${diffDays} días sin respaldo. Por favor, genere un Respaldo de Seguridad.`, 'warning', 10000);
+            mostrarNotificacion(`⚠️ ¡Advertencia! Ha pasado ${diffDays} días desde su último respaldo de seguridad. Por favor, genere una copia manual.`, 'warning', 10000);
         } else {
-            promptBtn.textContent = `Generar Respaldo de Seguridad (Próximo en ${diasParaBackup - diffDays} días)`;
-            promptBtn.classList.remove('btn-backup-urgent');
+            promptBtn.textContent = 'Generar Respaldo de Seguridad';
         }
     }
 
     function cargarDesdeUSB() {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'application/json';
-        input.onchange = e => {
+        input.accept = '.json';
+        input.onchange = function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
@@ -1569,62 +1881,52 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         input.click();
     }
 
-    function exportarRecetasTexto() {
-        if (datos.recetas.length === 0) { mostrarNotificacion('No hay recetas para exportar.', 'warning'); return; }
-
-        let texto = `--- RECETAS EXPORTADAS CHEFPORTABLE ---\n`;
-        texto += `TASA DE CAMBIO: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}\n\n`;
-
-        datos.recetas.forEach(receta => {
-            texto += `RECETA: ${receta.nombre}\n`;
-            texto += `PORCIONES: ${receta.porciones}\n`;
-            texto += `COSTO TOTAL: ${formatBothCurrencies(receta.costo)}\n`;
-            texto += `COSTO POR PORCIÓN: ${formatBothCurrencies(receta.costoPorPorcion)}\n`;
-            texto += `INGREDIENTES:\n`;
-            receta.ingredientes.forEach(item => {
-                const nombreIng = datos.ingredientes[item.id]?.nombre || 'Desconocido';
-                texto += `  - ${item.cantidad} ${item.unidad} de ${nombreIng}\n`;
-            });
-            texto += '\n---\n\n';
-        });
-
-        const blob = new Blob([texto], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'recetas_chefportable.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        mostrarNotificacion('✅ Recetas exportadas a un archivo de texto.', 'success', 5000);
-    }
-
-
     // ============================================================================
-    // INICIALIZACIÓN
+    // FUNCIONES DE INICIALIZACIÓN Y VISTAS
     // ============================================================================
     
-    // Función para refrescar todos los componentes de la interfaz
     function actualizarVistas() {
+        // Actualiza el contador de ingredientes
+        const numIngredientes = Object.keys(datos.ingredientes).length;
+        document.getElementById('count-ingredientes').textContent = numIngredientes;
+
+        // Actualiza el contador de recetas
+        document.getElementById('count-recetas').textContent = datos.recetas.length;
+        
+        // Actualiza la tasa de cambio
         document.getElementById('inputTasaCambio').value = tasaCambioBCV.toFixed(2);
         document.getElementById('displayTasaCambio').textContent = `Bs. ${tasaCambioBCV.toFixed(2)}`;
-        
+
+        // Renderiza listas y actualiza selects
         renderIngredientes();
         renderRecetas();
         actualizarSelects();
-        actualizarEstadisticas();
-        checkBackupStatus(); // Asegurar que el estado de backup se actualice
-        if (document.querySelector('.tab-content.active').id === 'tab-calculos') {
-            actualizarGrafico();
+        checkBackupStatus();
+        
+        // Calcular y mostrar el costo promedio por unidad de todos los ingredientes (solo un placeholder)
+        let totalCostoUnitarioUSD = 0;
+        let count = 0;
+        for (const id in datos.ingredientes) {
+            datos.ingredientes[id].marcas.forEach(m => {
+                const cantidadBase = convertir(m.presentacionCantidad, m.presentacionUnidad);
+                const costoUnitarioUSD = m.precio / cantidadBase;
+                if (!isNaN(costoUnitarioUSD) && isFinite(costoUnitarioUSD)) {
+                    totalCostoUnitarioUSD += costoUnitarioUSD;
+                    count++;
+                }
+            });
         }
+        
+        const costoPromedioGeneral = count > 0 ? totalCostoUnitarioUSD / count : 0;
+        document.getElementById('total-costo-usd').textContent = `$${costoPromedioGeneral.toFixed(2)}`;
+        document.getElementById('total-costo-ves').textContent = `Bs. ${usdToVes(costoPromedioGeneral).toFixed(2)}`;
     }
 
     async function initApp() {
-      // 1. Cargar datos de IndexDB (Esto inicializa IndexDB primero)
+      // 1. Carga de datos
       await cargarDatosLocal();
-      
-      // 2. Setup PWA, Service Worker, y Status Bar (Mismo código)
+
+      // 2. Inicialización de PWA y Service Worker
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
@@ -1633,23 +1935,28 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
       document.getElementById('installButton').addEventListener('click', (e) => {
         document.getElementById('installButton').style.display = 'none';
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {
-          if (choiceResult.outcome === 'accepted') {
-            mostrarNotificacion('ChefPortable PRO instalado correctamente!', 'success');
-          }
-          deferredPrompt = null;
-          document.getElementById('installButton').style.display = 'none';
-        });
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('Usuario aceptó la instalación A2HS');
+                } else {
+                    console.log('Usuario rechazó la instalación A2HS');
+                }
+                deferredPrompt = null;
+            });
+        }
       });
       
-      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) { 
-          document.getElementById('installButton').style.display = 'none'; 
+      // Ocultar botón si ya está instalada
+      if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+         document.getElementById('installButton').style.display = 'none';
       }
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
+          // Asegurarse de que el Service Worker está apuntando a 'sw.js'
+          navigator.serviceWorker.register('./sw.js').then(registration => {
             console.log('ServiceWorker registrado:', registration.scope);
           }).catch(error => {
             console.log('Error registrando ServiceWorker:', error);
@@ -1681,11 +1988,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     }
 
     // Iniciar la aplicación
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initApp);
-    } else {
-      initApp();
-    }
+    initApp();
   </script>
 </body>
 </html>
