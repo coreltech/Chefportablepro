@@ -371,14 +371,25 @@
             </div>
         </div>
         <p style="margin-top: 10px; font-weight: 600;">$1.00 USD = <span id="displayTasaCambio" style="color: var(--secondary);">Bs. 0.00</span> VES</p>
-    </section>
+
+        <div class="header-content" style="margin-top: 20px;">
+            <h2 style="border-bottom: none; margin-bottom: 0;"><i class="fas fa-clock"></i> Valor Personal de tu Hora (Mano de Obra)</h2>
+            <div class="flex">
+                <input type="number" step="0.01" id="inputValorHora" style="width: 150px; margin: 0;" placeholder="Ej: 3.00">
+                <button class="btn btn-success" onclick="guardarValorHora()">
+                    <i class="fas fa-save"></i> Fijar Valor
+                </button>
+            </div>
+        </div>
+        <p style="margin-top: 10px; font-weight: 600;">Tu hora de trabajo: <span id="displayValorHora" style="color: var(--secondary);">$0.00</span> USD</p>
+        </section>
 
     <header class="app-header">
       <div class="header-content">
         <div class="logo">
           <span class="logo-icon">🍳</span>
           <h1>ChefPortable PRO</h1>
-          <span class="version">v3.3 (Local/IndexDB)</span>
+          <span class="version">v3.4 (Local/IndexDB)</span>
         </div>
         <div class="header-stats">
           <span class="stat">
@@ -471,17 +482,42 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         <h3>Ingredientes</h3>
         <div id="recetaIngContainer"></div>
         
+        <div class="flex">
+          <button class="btn btn-success" onclick="addIngReceta()">
+            <i class="fas fa-plus"></i> Agregar Ingrediente
+          </button>
+        </div>
+        
+        <h3>Costo y Venta</h3>
+        <p style="font-size: 0.9rem; margin-bottom: 20px;">Valore su trabajo y gastos fijos para calcular un precio de venta justo.</p>
+        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+                <label>Tiempo de Preparación (Minutos)</label>
+                <input type="number" id="tiempoTotalMinutos" value="30" min="0" placeholder="Ej: 30">
+            </div>
+            <div>
+                <label>Costo Fijo Servicios/Empaque ($)</label>
+                <input type="number" step="0.01" id="costoFijoAdicional" value="0.00" min="0" placeholder="Ej: 0.50">
+            </div>
+            <div>
+                <label>Factor de Merma (%)</label>
+                <input type="number" step="0.1" id="factorMerma" value="5.0" min="0" max="100" placeholder="Ej: 5">
+            </div>
+            <div>
+                <label>Margen de Ganancia (%)</label>
+                <input type="number" id="margenGanancia" value="40" min="0" placeholder="Ej: 40">
+            </div>
+        </div>
         <label>Pasos de Preparación <small>(Opcional)</small></label>
         <textarea id="recetaPasos" rows="6" placeholder="1. Precalentar el horno a 180°C.
 2. Mezclar los ingredientes secos.
 3. Añadir los ingredientes líquidos y mezclar hasta obtener una masa homogénea.
 4. Hornear por 30 minutos..."></textarea>
+        
+
         <div class="flex">
-          <button class="btn btn-success" onclick="addIngReceta()">
-            <i class="fas fa-plus"></i> Agregar Ingrediente
-          </button>
           <button class="btn" onclick="calcularReceta()">
-            <i class="fas fa-calculator"></i> Calcular Costo
+            <i class="fas fa-calculator"></i> Calcular Costo y Precio Venta
           </button>
           <button class="btn btn-success" onclick="guardarReceta()">
             <i class="fas fa-save"></i> Guardar Receta
@@ -491,7 +527,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
       <section class="section">
         <h2><i class="fas fa-file-alt"></i> 2. Cargar Receta desde Texto</h2>
-        <p>Solo se cargarán ingredientes, los pasos deben añadirse manualmente.</p>
+        <p>Solo se cargarán ingredientes, los pasos y costos indirectos deben añadirse manualmente.</p>
         <textarea id="textoReceta" rows="6" placeholder="500 gramos de harina
 3 huevos
 200 ml de leche
@@ -575,6 +611,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     let deferredPrompt = null;
     let ingredienteIdAEditar = null; 
     let tasaCambioBCV = 1.00; 
+    let valorHoraPersonal = 3.00; // NUEVO: Valor por defecto de la hora personal
 
     // Configuración IndexDB
     const DB_NAME = 'ChefPortableDB';
@@ -596,7 +633,8 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
           autoguardado: true,
           ultimaModificacion: null,
           tasaCambio: 1.00,
-          ultimoBackup: null, // NUEVO: Timestamp del último backup forzado
+          valorHoraPersonal: 3.00, // NUEVO: Default para el valor hora
+          ultimoBackup: null, 
         }
       };
     }
@@ -606,8 +644,10 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
       if (!datos.recetas || !Array.isArray(datos.recetas)) { datos.recetas = []; }
       if (!datos.config || typeof datos.config !== 'object') { datos.config = crearDatosSeguros().config; }
       
-      // Asegurarse de que el campo de backup exista
+      // Asegurarse de que el campo de backup, tasa y valor hora existan
       if (datos.config.ultimoBackup === undefined) { datos.config.ultimoBackup = null; }
+      if (datos.config.tasaCambio === undefined) { datos.config.tasaCambio = 1.00; }
+      if (datos.config.valorHoraPersonal === undefined) { datos.config.valorHoraPersonal = 3.00; } // Asigna default si no existe
     }
 
     // Inicializa y abre la base de datos IndexDB
@@ -662,9 +702,12 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                     datos = event.target.result.data;
                     validarYEstructurarDatos();
                     
-                    // Cargar tasa de cambio guardada
+                    // Cargar tasa de cambio y valor hora guardados
                     if (datos.config && datos.config.tasaCambio) {
                         tasaCambioBCV = datos.config.tasaCambio;
+                    }
+                    if (datos.config && datos.config.valorHoraPersonal) { // NUEVO
+                        valorHoraPersonal = datos.config.valorHoraPersonal;
                     }
                     mostrarNotificacion('Datos cargados del almacenamiento local robusto.', 'info');
                 } else {
@@ -683,8 +726,9 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             return;
         }
         
-        // Asegúrese de guardar la tasa de cambio y el timestamp
+        // Asegúrese de guardar la tasa de cambio, el valor hora y el timestamp
         datos.config.tasaCambio = tasaCambioBCV; 
+        datos.config.valorHoraPersonal = valorHoraPersonal; // NUEVO
 
         try {
             const transaction = dbIndex.transaction([STORE_NAME], "readwrite");
@@ -707,7 +751,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     }
     
     // ============================================================================
-    // UTILIDADES DE CONVERSIÓN DE MONEDA
+    // UTILIDADES DE CONVERSIÓN DE MONEDA Y CONFIGURACIÓN
     // ============================================================================
     function usdToVes(usd) {
         return usd * tasaCambioBCV;
@@ -737,6 +781,22 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         actualizarVistas(); 
 
         mostrarNotificacion(`Tasa de cambio fijada: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}`, 'success');
+    }
+    
+    // NUEVA FUNCIÓN: Guardar el valor de la hora personal
+    function guardarValorHora() {
+        const nuevoValor = parseFloat(document.getElementById('inputValorHora').value);
+
+        if (isNaN(nuevoValor) || nuevoValor < 0) {
+            mostrarNotificacion('Por favor, ingrese un valor por hora válido (cero o más).', 'error');
+            return;
+        }
+
+        valorHoraPersonal = nuevoValor;
+        marcarModificacion(); 
+        actualizarVistas(); 
+
+        mostrarNotificacion(`Valor Personal por Hora fijado: $${valorHoraPersonal.toFixed(2)} USD`, 'success');
     }
 
     // ============================================================================
@@ -883,8 +943,10 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
 
     // ============================================================================
-    // FUNCIONES DE INGREDIENTES (MODIFICADAS)
+    // FUNCIONES DE INGREDIENTES 
     // ============================================================================
+    
+    // ... (Las funciones de Ingredientes no cambian, se omiten para concisión) ...
 
     function crearMarcaInput(marca = {}) {
         const d = document.createElement('div');
@@ -897,14 +959,12 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         let precio = marca.precio || '';
         let monedaSeleccionada = 'usd';
         
-        if (marca.precio && marca.moneda === 'usd') {
-            // Convertir de USD a la moneda local para mostrar el precio original si la tasa es > 0
-            if (tasaCambioBCV > 0) {
-                precio = usdToVes(marca.precio);
-                monedaSeleccionada = 'ves';
+        if (marca.precio) {
+            monedaSeleccionada = marca.moneda || 'usd';
+            if (monedaSeleccionada === 'ves') {
+                precio = usdToVes(marca.precio); // Convertir a VES para mostrar en el input si se guardó así (aunque el guardado interno es USD)
             } else {
-                precio = marca.precio;
-                monedaSeleccionada = 'usd';
+                 precio = marca.precio;
             }
         }
         
@@ -1247,7 +1307,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
     }
     
     // ============================================================================
-    // FUNCIONES DE RECETAS (MODIFICADAS/AÑADIDAS)
+    // FUNCIONES DE RECETAS (ACTUALIZADAS con Costos Indirectos y Precio Venta)
     // ============================================================================
 
     function addIngReceta(item = {}) {
@@ -1300,6 +1360,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         button.closest('.ing-receta').remove();
     }
     
+    // Función que calcula SÓLO el costo de los ingredientes puros
     function calcularCostoReceta(receta) {
         let costoTotalUSD = 0;
         let errores = [];
@@ -1328,12 +1389,57 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
         return { costoTotalUSD, errores };
     }
+    
+    // NUEVA FUNCIÓN HELPER: Realiza el cálculo completo (Ingredientes + Indirectos + Venta)
+    function realizarCalculoReceta(receta) {
+        const { costoTotalUSD, errores } = calcularCostoReceta(receta); // Costo de Ingredientes Puros
+
+        // 1. Obtener factores de costos indirectos
+        const tiempoTotalMinutos = parseFloat(receta.tiempoTotalMinutos || 0);
+        const costoFijoAdicional = parseFloat(receta.costoFijoAdicional || 0);
+        const factorMerma = parseFloat(receta.factorMerma || 0);
+        const margenGanancia = parseFloat(receta.margenGanancia || 0);
+        const porciones = parseFloat(receta.porciones || 1);
+        
+        // 2. Calcular Costos Indirectos
+        const costoManoObraTotal = (valorHoraPersonal / 60) * tiempoTotalMinutos;
+        const costoMermaTotal = costoTotalUSD * (factorMerma / 100);
+        const costoIndirectoTotal = costoManoObraTotal + costoFijoAdicional + costoMermaTotal;
+        
+        // 3. Calcular Costo Real Total
+        const costoRealTotal = costoTotalUSD + costoIndirectoTotal;
+        const costoRealPorPorcion = costoRealTotal / porciones;
+        
+        // 4. Calcular Precio de Venta Sugerido
+        const precioVentaSugeridoTotal = costoRealTotal * (1 + (margenGanancia / 100));
+        const precioVentaPorPorcion = precioVentaSugeridoTotal / porciones;
+        
+        return {
+            costoIngredientes: costoTotalUSD,
+            costoRealTotal,
+            costoRealPorPorcion,
+            costoManoObraTotal,
+            costoFijoAdicional,
+            costoMermaTotal,
+            costoIndirectoTotal,
+            precioVentaSugeridoTotal,
+            precioVentaPorPorcion,
+            errores
+        };
+    }
+
 
     function guardarReceta(modoEdicion = false) {
         const nombre = document.getElementById('recetaNombre').value.trim();
         const porciones = parseInt(document.getElementById('porciones').value);
         const ingItems = document.querySelectorAll('#recetaIngContainer .ing-receta');
-        const pasos = document.getElementById('recetaPasos').value.trim(); // NUEVO: Leer pasos
+        const pasos = document.getElementById('recetaPasos').value.trim(); 
+        
+        // NUEVO: Leer factores de costo indirecto
+        const tiempoTotalMinutos = document.getElementById('tiempoTotalMinutos').value;
+        const costoFijoAdicional = document.getElementById('costoFijoAdicional').value;
+        const factorMerma = document.getElementById('factorMerma').value;
+        const margenGanancia = document.getElementById('margenGanancia').value;
 
         if (!nombre) {
             mostrarNotificacion('El nombre de la receta es obligatorio.', 'error');
@@ -1341,6 +1447,12 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
         if (isNaN(porciones) || porciones < 1) {
             mostrarNotificacion('El número de porciones debe ser 1 o más.', 'error');
+            return;
+        }
+        
+        // Validación simple para nuevos campos
+        if (isNaN(parseFloat(tiempoTotalMinutos)) || isNaN(parseFloat(costoFijoAdicional)) || isNaN(parseFloat(factorMerma)) || isNaN(parseFloat(margenGanancia))) {
+            mostrarNotificacion('Asegúrese de que todos los campos de Costo y Venta tengan un número válido.', 'error');
             return;
         }
 
@@ -1366,25 +1478,43 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             return;
         }
 
-        const receta = {
+        const recetaBase = {
             nombre: nombre,
             porciones: porciones,
             ingredientes: ingredientes,
-            pasos: pasos, // NUEVO: Guardar pasos
+            pasos: pasos, 
+            // NUEVOS CAMPOS
+            tiempoTotalMinutos: parseFloat(tiempoTotalMinutos),
+            costoFijoAdicional: parseFloat(costoFijoAdicional),
+            factorMerma: parseFloat(factorMerma),
+            margenGanancia: parseFloat(margenGanancia),
+            // VALORES CALCULADOS (Se inicializan para la estructura)
+            costo: 0, 
+            costoRealTotal: 0, 
+            costoRealPorPorcion: 0,
+            precioVentaSugerido: 0, 
+            precioVentaPorPorcion: 0, 
+            costoIndirectoTotal: 0,
             ultimaCalculada: null,
-            costo: 0,
-            costoPorPorcion: 0,
         };
 
-        const { costoTotalUSD, errores } = calcularCostoReceta(receta);
+        const calculo = realizarCalculoReceta(recetaBase);
         
-        if (errores.length > 0) {
-            mostrarNotificacion(`Receta guardada, pero con errores de cálculo. Revise los ingredientes: ${errores.join(', ')}`, 'warning', 7000);
+        if (calculo.errores.length > 0) {
+            mostrarNotificacion(`Receta guardada, pero con errores de cálculo. Revise los ingredientes: ${calculo.errores.join(', ')}`, 'warning', 7000);
         }
 
-        receta.costo = costoTotalUSD;
-        receta.costoPorPorcion = costoTotalUSD / porciones;
-        receta.ultimaCalculada = new Date().toISOString();
+        // Actualizar el objeto receta con los resultados del cálculo
+        const receta = {
+            ...recetaBase,
+            costo: calculo.costoIngredientes, // Costo Ingredientes Puros
+            costoRealTotal: calculo.costoRealTotal,
+            costoRealPorPorcion: calculo.costoRealPorPorcion,
+            costoIndirectoTotal: calculo.costoIndirectoTotal,
+            precioVentaSugerido: calculo.precioVentaSugeridoTotal,
+            precioVentaPorPorcion: calculo.precioVentaPorPorcion,
+            ultimaCalculada: new Date().toISOString()
+        };
 
         const indexExistente = datos.recetas.findIndex(r => r.nombre === nombre);
         if (indexExistente !== -1) {
@@ -1401,22 +1531,36 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         // Limpiar el formulario
         document.getElementById('recetaNombre').value = '';
         document.getElementById('porciones').value = '4';
-        document.getElementById('recetaPasos').value = ''; // LIMPIAR NUEVO CAMPO
+        document.getElementById('recetaPasos').value = '';
         document.getElementById('recetaIngContainer').innerHTML = '';
+        // Reset de campos indirectos
+        document.getElementById('tiempoTotalMinutos').value = '30';
+        document.getElementById('costoFijoAdicional').value = '0.00';
+        document.getElementById('factorMerma').value = '5.0';
+        document.getElementById('margenGanancia').value = '40';
         addIngReceta();
     }
 
+    // FUNCIÓN ACTUALIZADA: Ahora calcula y muestra el precio de venta sugerido
     function calcularReceta() {
         // Simular el guardado para obtener los valores actuales del formulario
         const nombre = document.getElementById('recetaNombre').value.trim();
         const porciones = parseInt(document.getElementById('porciones').value);
         const ingItems = document.querySelectorAll('#recetaIngContainer .ing-receta');
+        
+        // NUEVO: Lectura de factores
+        const tiempoTotalMinutos = document.getElementById('tiempoTotalMinutos').value;
+        const costoFijoAdicional = document.getElementById('costoFijoAdicional').value;
+        const factorMerma = document.getElementById('factorMerma').value;
+        const margenGanancia = document.getElementById('margenGanancia').value;
 
-        if (!nombre || isNaN(porciones) || porciones < 1 || ingItems.length === 0) {
-            mostrarNotificacion('Complete el nombre, porciones y agregue al menos un ingrediente.', 'warning');
+        if (!nombre || isNaN(porciones) || porciones < 1 || ingItems.length === 0 || 
+            isNaN(parseFloat(tiempoTotalMinutos)) || isNaN(parseFloat(costoFijoAdicional)) || 
+            isNaN(parseFloat(factorMerma)) || isNaN(parseFloat(margenGanancia))) {
+            mostrarNotificacion('Complete todos los campos requeridos (Nombre, Porciones, Ingredientes, Costos Indirectos).', 'warning');
             return;
         }
-
+        
         const ingredientes = [];
         ingItems.forEach(item => {
             const id = item.querySelector('.select-ingrediente').value;
@@ -1432,24 +1576,49 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             return;
         }
         
-        const recetaSimulada = { nombre, porciones, ingredientes };
-        const { costoTotalUSD, errores } = calcularCostoReceta(recetaSimulada);
+        const recetaSimulada = { 
+            nombre, porciones, ingredientes, 
+            tiempoTotalMinutos: parseFloat(tiempoTotalMinutos),
+            costoFijoAdicional: parseFloat(costoFijoAdicional),
+            factorMerma: parseFloat(factorMerma),
+            margenGanancia: parseFloat(margenGanancia)
+        };
+        
+        const calculo = realizarCalculoReceta(recetaSimulada);
         
         const resultadoDiv = document.getElementById('resultado');
         const resultadoSection = document.getElementById('resultadoSection');
         resultadoSection.style.display = 'block';
 
-        let html = `<h3>Costo de ${nombre}</h3>`;
+        let html = `<h3>Costo y Precio de Venta Sugerido para ${nombre}</h3>`;
         
-        if (errores.length > 0) {
-            html += `<p style="color:var(--danger);"><strong>Error en el Cálculo:</strong> No se pudo calcular el costo de los siguientes ingredientes: ${errores.join(', ')}</p>`;
+        if (calculo.errores.length > 0) {
+            html += `<p style="color:var(--danger);"><strong>Error en el Cálculo:</strong> No se pudo calcular el costo de los siguientes ingredientes: ${calculo.errores.join(', ')}</p><hr>`;
         }
         
-        const costoPorcionUSD = costoTotalUSD / porciones;
-
+        // Resultados detallados para el usuario
         html += `
-            <p><strong>Costo Total de la Receta:</strong> <span class="usd-cost">${formatBothCurrencies(costoTotalUSD)}</span></p>
-            <p><strong>Costo por Porción (${porciones} porciones):</strong> <span class="usd-cost">${formatBothCurrencies(costoPorcionUSD)}</span></p>
+            <h4>1. Costos Puros</h4>
+            <p><strong>Costo Ingredientes (Puro):</strong> ${formatBothCurrencies(calculo.costoIngredientes)}</p>
+            <hr>
+            
+            <h4>2. Costos Indirectos (Por Batch)</h4>
+            <p>Valor Hora Personal fijado: ${formatBothCurrencies(valorHoraPersonal)}</p>
+            <p><strong>Merma (${recetaSimulada.factorMerma}%):</strong> ${formatBothCurrencies(calculo.costoMermaTotal)}</p>
+            <p><strong>Mano de Obra (MO - ${recetaSimulada.tiempoTotalMinutos} min):</strong> ${formatBothCurrencies(calculo.costoManoObraTotal)}</p>
+            <p><strong>Costo Fijo (Servicios/Empaque):</strong> ${formatBothCurrencies(recetaSimulada.costoFijoAdicional)}</p>
+            <p style="font-size:1.1rem; font-weight: bold;">Costo Indirecto Total: ${formatBothCurrencies(calculo.costoIndirectoTotal)}</p>
+            <hr>
+
+            <h2>3. Resumen de Costo Real</h2>
+            <p><strong>Costo Real Total (Ing. + Ind.):</strong> <span class="usd-cost">${formatBothCurrencies(calculo.costoRealTotal)}</span></p>
+            <p><strong>Costo Real por Porción:</strong> <span class="usd-cost">${formatBothCurrencies(calculo.costoRealPorPorcion)}</span></p>
+            <hr>
+            
+            <h2>4. Precio de Venta Sugerido</h2>
+            <p>Margen de Ganancia aplicado: ${recetaSimulada.margenGanancia}%</p>
+            <p><strong>Precio de Venta Sugerido (Total):</strong> <span class="usd-cost" style="color: var(--danger);">${formatBothCurrencies(calculo.precioVentaSugeridoTotal)}</span></p>
+            <p><strong>Precio de Venta Sugerido (Por Porción):</strong> <span class="usd-cost" style="color: var(--danger); font-size: 2rem;">${formatBothCurrencies(calculo.precioVentaPorPorcion)}</span></p>
         `;
 
         resultadoDiv.innerHTML = html;
@@ -1476,8 +1645,14 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
 
         document.getElementById('recetaNombre').value = receta.nombre;
         document.getElementById('porciones').value = receta.porciones;
-        document.getElementById('recetaPasos').value = receta.pasos || ''; // NUEVO: Cargar pasos
+        document.getElementById('recetaPasos').value = receta.pasos || ''; 
         
+        // NUEVO: Cargar campos de costo indirecto
+        document.getElementById('tiempoTotalMinutos').value = receta.tiempoTotalMinutos !== undefined ? receta.tiempoTotalMinutos : '30';
+        document.getElementById('costoFijoAdicional').value = receta.costoFijoAdicional !== undefined ? receta.costoFijoAdicional.toFixed(2) : '0.00';
+        document.getElementById('factorMerma').value = receta.factorMerma !== undefined ? receta.factorMerma.toFixed(1) : '5.0';
+        document.getElementById('margenGanancia').value = receta.margenGanancia !== undefined ? receta.margenGanancia : '40';
+
         const container = document.getElementById('recetaIngContainer');
         container.innerHTML = ''; // Limpiar ingredientes
         
@@ -1498,7 +1673,13 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         // Configurar la receta en el formulario
         document.getElementById('recetaNombre').value = 'Nueva Receta (Importada)';
         document.getElementById('porciones').value = '1';
-        document.getElementById('recetaPasos').value = ''; // NUEVO: Limpiar pasos en importación
+        document.getElementById('recetaPasos').value = ''; 
+        // Inicializar campos de costo indirecto al default
+        document.getElementById('tiempoTotalMinutos').value = '30';
+        document.getElementById('costoFijoAdicional').value = '0.00';
+        document.getElementById('factorMerma').value = '5.0';
+        document.getElementById('margenGanancia').value = '40';
+
         const container = document.getElementById('recetaIngContainer');
         container.innerHTML = ''; // Limpiar ingredientes existentes
         
@@ -1579,8 +1760,9 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                 <tr>
                     <th>Receta</th>
                     <th>Porciones</th>
-                    <th>Costo Total</th>
-                    <th>Costo/Porción</th>
+                    <th>Costo Ing. Puro</th>
+                    <th>Costo Real/Porción</th>
+                    <th>Precio Venta Sugerido</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -1597,7 +1779,8 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                     <td>${receta.nombre}</td>
                     <td>${receta.porciones}</td>
                     <td>${formatBothCurrencies(receta.costo)}</td>
-                    <td>${formatBothCurrencies(receta.costoPorPorcion)}</td>
+                    <td>${formatBothCurrencies(receta.costoRealPorPorcion || 0)}</td>
+                    <td style="font-weight: bold; color: var(--danger);">${formatBothCurrencies(receta.precioVentaPorPorcion || 0)}</td>
                     <td>
                         ${pasosBtn}
                         <button class="btn btn-secondary btn-sm" onclick="cargarReceta(${index})">
@@ -1709,20 +1892,24 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         }
 
         let texto = `--- RECETAS EXPORTADAS CHEFPORTABLE ---\n`;
-        texto += `TASA DE CAMBIO: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}\n\n`;
+        texto += `TASA DE CAMBIO: $1.00 = Bs. ${tasaCambioBCV.toFixed(2)}\n`;
+        texto += `VALOR HORA PERSONAL: $${valorHoraPersonal.toFixed(2)}\n\n`; // NUEVO
 
         datos.recetas.forEach(receta => {
             texto += `RECETA: ${receta.nombre}\n`;
             texto += `PORCIONES: ${receta.porciones}\n`;
-            texto += `COSTO TOTAL: ${formatBothCurrencies(receta.costo)}\n`;
-            texto += `COSTO POR PORCIÓN: ${formatBothCurrencies(receta.costoPorPorcion)}\n`;
+            texto += `COSTO INGREDIENTES PURO: ${formatBothCurrencies(receta.costo)}\n`; 
+            texto += `COSTO REAL TOTAL: ${formatBothCurrencies(receta.costoRealTotal || 0)}\n`; // NUEVO
+            texto += `COSTO REAL POR PORCIÓN: ${formatBothCurrencies(receta.costoRealPorPorcion || 0)}\n`; // NUEVO
+            texto += `PRECIO VENTA SUGERIDO: ${formatBothCurrencies(receta.precioVentaSugerido || 0)}\n`; // NUEVO
+            texto += `(Margen ${receta.margenGanancia || 0}%, Merma ${receta.factorMerma || 0}%, Tiempo ${receta.tiempoTotalMinutos || 0} min, Fijo ${receta.costoFijoAdicional || 0})\n`; // NUEVO
             texto += `INGREDIENTES:\n`;
             receta.ingredientes.forEach(item => {
                 const nombreIng = datos.ingredientes[item.id]?.nombre || 'Ingrediente Desconocido';
                 texto += `  - ${item.cantidad} ${item.unidad} de ${nombreIng}\n`;
             });
 
-            // NUEVO: Incluir pasos de preparación
+            // Incluir pasos de preparación
             if (receta.pasos && receta.pasos.trim().length > 0) {
                  texto += `\nPASOS:\n${receta.pasos.trim()}\n`;
             } else {
@@ -1753,11 +1940,11 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             return;
         }
 
-        // Ordenar recetas por costo por porción (mayor a menor)
-        const recetasOrdenadas = [...datos.recetas].sort((a, b) => b.costoPorPorcion - a.costoPorPorcion);
+        // Ordenar recetas por Precio de Venta Por Porción (mayor a menor)
+        const recetasOrdenadas = [...datos.recetas].sort((a, b) => (b.precioVentaPorPorcion || b.costoRealPorPorcion || 0) - (a.precioVentaPorPorcion || a.costoRealPorPorcion || 0));
 
         const labels = recetasOrdenadas.map(r => r.nombre);
-        const costosUSD = recetasOrdenadas.map(r => r.costoPorPorcion.toFixed(2));
+        const preciosUSD = recetasOrdenadas.map(r => (r.precioVentaPorPorcion || r.costoRealPorPorcion || 0).toFixed(2));
 
         if (chartInstance) {
             chartInstance.destroy();
@@ -1768,10 +1955,10 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Costo por Porción ($ USD)',
-                    data: costosUSD,
-                    backgroundColor: 'rgba(67, 97, 238, 0.7)',
-                    borderColor: 'rgba(67, 97, 238, 1)',
+                    label: 'Precio Venta Sugerido por Porción ($ USD)', // Eje principal: Precio de Venta
+                    data: preciosUSD,
+                    backgroundColor: 'rgba(247, 37, 133, 0.7)', // Color Danger/Venta
+                    borderColor: 'rgba(247, 37, 133, 1)',
                     borderWidth: 1
                 }]
             },
@@ -1782,7 +1969,7 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
                         beginAtZero: true,
                         title: {
                             display: true,
-                            text: 'Costo ($ USD)'
+                            text: 'Precio Venta ($ USD)'
                         }
                     },
                     x: {
@@ -1896,6 +2083,11 @@ Huevos - Granja - 12 unidades - $2.50"></textarea>
         // Actualiza la tasa de cambio
         document.getElementById('inputTasaCambio').value = tasaCambioBCV.toFixed(2);
         document.getElementById('displayTasaCambio').textContent = `Bs. ${tasaCambioBCV.toFixed(2)}`;
+        
+        // ACTUALIZA EL VALOR HORA PERSONAL
+        document.getElementById('inputValorHora').value = valorHoraPersonal.toFixed(2);
+        document.getElementById('displayValorHora').textContent = `$${valorHoraPersonal.toFixed(2)} USD`;
+
 
         // Renderiza listas y actualiza selects
         renderIngredientes();
