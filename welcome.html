@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#4361ee">
+  <meta name="description" content="ChefPortable PRO - La herramienta definitiva para chefs y reposteros.">
+  
+  <title>Bienvenido a ChefPortable PRO</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    :root {
+      --primary: #4361ee;
+      --secondary: #3a0ca3;
+      --accent: #4cc9f0;
+      --light: #f8f9fa;
+      --dark: #212529;
+      --gradient-primary: linear-gradient(135deg, #4361ee, #3a0ca3);
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    
+    body { background-color: #f5f7fa; color: #333; line-height: 1.6; }
+
+    /* ===== HERO SECTION ===== */
+    .hero {
+      background: var(--gradient-primary);
+      color: white;
+      padding: 80px 20px 100px;
+      text-align: center;
+      border-radius: 0 0 50% 50% / 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuMSIvPjwvc3ZnPg==');
+      opacity: 0.3;
+    }
+
+    .hero-content { position: relative; z-index: 2; max-width: 800px; margin: 0 auto; }
+    
+    .logo-icon { font-size: 4rem; margin-bottom: 20px; display: inline-block; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.2)); animation: float 3s ease-in-out infinite; }
+    
+    h1 { font-size: 3rem; margin-bottom: 15px; font-weight: 800; letter-spacing: -1px; }
+    .subtitle { font-size: 1.2rem; margin-bottom: 40px; opacity: 0.9; max-width: 600px; margin-left: auto; margin-right: auto; }
+
+    .cta-btn {
+      background: white;
+      color: var(--primary);
+      padding: 18px 45px;
+      border-radius: 50px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 1.2rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .cta-btn:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.3); background: var(--accent); color: white; }
+
+    /* ===== FEATURES ===== */
+    .features-container {
+      max-width: 1100px;
+      margin: -60px auto 40px;
+      padding: 0 20px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
+
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      transition: transform 0.3s ease;
+      text-align: center;
+      border-top: 5px solid var(--primary);
+    }
+
+    .card:hover { transform: translateY(-10px); }
+
+    .icon-box {
+      width: 60px; height: 60px;
+      background: #eef2ff;
+      color: var(--primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin: 0 auto 20px;
+    }
+
+    h3 { margin-bottom: 10px; color: var(--secondary); }
+    p { font-size: 0.95rem; color: #6c757d; margin-bottom: 0; }
+
+    /* ===== INFO SECTION ===== */
+    .info-section { max-width: 900px; margin: 60px auto; padding: 0 20px; text-align: center; }
+    .tag { background: #dcfce7; color: #166534; padding: 5px 15px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; display: inline-block; margin-bottom: 15px; }
+
+    /* ===== FOOTER ===== */
+    footer { text-align: center; padding: 40px 20px; color: #6c757d; font-size: 0.9rem; border-top: 1px solid #e9ecef; margin-top: 50px; }
+
+    /* ANIMACIONES */
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    
+    @media (max-width: 768px) {
+      h1 { font-size: 2.2rem; }
+      .hero { padding: 60px 20px 80px; }
+      .features-container { margin-top: -40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="hero">
+    <div class="hero-content">
+      <div class="logo-icon">🍳</div>
+      <h1>ChefPortable PRO</h1>
+      <p class="subtitle">La calculadora profesional para estandarizar tus recetas, controlar mermas y asegurar tus ganancias.</p>
+      
+      <a href="./index.html" class="cta-btn">
+        <i class="fas fa-play"></i> Comenzar Ahora
+      </a>
+      
+      <div style="margin-top: 20px; font-size: 0.9rem; opacity: 0.8;">
+        <i class="fas fa-check-circle"></i> Versión Local v3.4 &bull; No requiere internet
+      </div>
+    </div>
+  </header>
+
+  <div class="features-container">
+    <div class="grid">
+      <div class="card">
+        <div class="icon-box"><i class="fas fa-calculator"></i></div>
+        <h3>Costo Real y Mermas</h3>
+        <p>No calcules solo los ingredientes. Incluye automáticamente factores de merma, mano de obra y costos fijos de empaque.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
+        <h3>100% Privado y Local</h3>
+        <p>Tus recetas nunca salen de tu dispositivo. Usamos tecnología IndexDB para un guardado seguro y respaldos en JSON.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon-box"><i class="fas fa-chart-line"></i></div>
+        <h3>Precios de Venta</h3>
+        <p>Define tu margen de ganancia deseado y obtén sugerencias de precio de venta por porción o por receta completa.</p>
+      </div>
+    </div>
+  </div>
+
+  <section class="info-section">
+    <span class="tag">NOVEDAD v3.4</span>
+    <h2>Gestiona tu cocina como un negocio</h2>
+    <p style="margin-top: 15px; font-size: 1.1rem; color: #555;">
+      Olvídate de las hojas de cálculo complicadas. ChefPortable PRO te permite importar listas de ingredientes desde texto, gestionar múltiples marcas con diferentes precios y exportar tus listas de compra automáticamente.
+    </p>
+    
+    <div style="margin-top: 40px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 10px; color: #495057;">
+            <i class="fas fa-dollar-sign" style="color: var(--primary);"></i> Soporte Multi-moneda
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; color: #495057;">
+            <i class="fas fa-wifi" style="color: var(--primary);"></i> Funciona Offline
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; color: #495057;">
+            <i class="fas fa-download" style="color: var(--primary);"></i> Instalable como App
+        </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>ChefPortable PRO - Local Edition<br>Desarrollado para optimizar tu producción culinaria.</p>
+    <p style="margin-top: 10px; font-size: 0.8rem;">&copy; 2024 - Todos los derechos reservados.</p>
+  </footer>
+
+</body>
+</html>
